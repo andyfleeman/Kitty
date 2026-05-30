@@ -578,6 +578,7 @@ function checkCollisions() {
       spawnPoof(catX,catY,t.kind==='mega'?16:10);
       spawnParticles(catX,catY,col,t.kind==='mega'?22:14,t.kind==='mega'?1.4:1);
       combo++;
+      catVX += combo * 0.4;
       if(combo>maxCombo)maxCombo=combo;
       totalBounces++;
       const msgs={1:'Boing!',2:'Double!',3:'Triple!🔥',4:'On Fire!🔥',5:'SUPER HOT!🔥🔥',6:'INSANE!⚡',7:'GODLIKE!💥',8:'LEGENDARY!🌟'};
@@ -624,6 +625,7 @@ function checkCollisions() {
       spawnParticles(catX,catY,'#cc88ff',22,1.2);
       spawnPopup(catX,catY-50,'🌀 TORNADO!','#cc88ff');
     }
+    catVX += combo * 0.3;
     totalBounces++;
     groundedFrames=0; skidding=false;
   }
