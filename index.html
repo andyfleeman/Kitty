@@ -863,8 +863,10 @@ function generateSpaceObjects() {
     const y = groundY - spaceGenBand * H * 0.9 - Math.random() * H * 0.25;
     const count = Math.random() < 0.35 ? 2 : 1;
     for(let i=0; i<count; i++) {
-      const kinds = ['ufo','satellite','alien'];
-      const k = kinds[Math.floor(Math.random()*kinds.length)];
+      const upKinds = ['ufo','satellite','alien'];
+      const downKinds = ['black_hole','asteroid','gravity_wave'];
+      const pool = Math.random() < 0.5 ? upKinds : downKinds;
+      const k = pool[Math.floor(Math.random()*pool.length)];
       spaceObjects.push({ x:catX+(Math.random()-0.5)*W*1.2+W*0.3, y, kind:k, anim:Math.random()*100, hit:false, vx:(Math.random()-0.5)*0.7 });
     }
   }
@@ -950,6 +952,79 @@ function drawSpaceObject(s) {
     ctx.strokeStyle='#226622'; ctx.lineWidth=2;
     ctx.beginPath(); ctx.moveTo(-14,2); ctx.lineTo(-28,-10+wv); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(14,2); ctx.lineTo(28,-10-wv); ctx.stroke();
+  } else if(s.kind==='black_hole') {
+    // Outer warning glow (red/orange)
+    const pulse = 0.6 + Math.sin(t * 0.07) * 0.4;
+    const outerGlow = ctx.createRadialGradient(0,0,18,0,0,60);
+    outerGlow.addColorStop(0,'rgba(255,40,0,0.0)'); outerGlow.addColorStop(0.6,`rgba(255,80,0,${0.18*pulse})`); outerGlow.addColorStop(1,'rgba(255,0,0,0)');
+    ctx.fillStyle=outerGlow; ctx.beginPath(); ctx.arc(0,0,60,0,Math.PI*2); ctx.fill();
+    // Accretion disk (orange/red ellipse)
+    ctx.save(); ctx.scale(1,0.35);
+    const disk = ctx.createRadialGradient(0,0,14,0,0,42);
+    disk.addColorStop(0,'rgba(255,120,0,0.9)'); disk.addColorStop(0.5,'rgba(200,40,0,0.7)'); disk.addColorStop(1,'rgba(100,0,0,0)');
+    ctx.fillStyle=disk; ctx.beginPath(); ctx.arc(0,0,42,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+    // Spinning streaks
+    for(let i=0;i<8;i++){
+      const a=(i/8)*Math.PI*2+t*0.05;
+      ctx.strokeStyle=`rgba(255,${60+i*20},0,${0.5-i*0.04})`;
+      ctx.lineWidth=2.5-i*0.2;
+      ctx.beginPath(); ctx.arc(0,0,18+i*2.5,a,a+0.6); ctx.stroke();
+    }
+    // Central void
+    const void_ = ctx.createRadialGradient(0,0,0,0,0,18);
+    void_.addColorStop(0,'rgba(0,0,0,1)'); void_.addColorStop(0.7,'rgba(5,0,10,1)'); void_.addColorStop(1,'rgba(20,0,30,0.9)');
+    ctx.fillStyle=void_; ctx.beginPath(); ctx.arc(0,0,18,0,Math.PI*2); ctx.fill();
+    // ⚠ warning text
+    ctx.fillStyle=`rgba(255,80,0,${0.6+Math.sin(t*0.15)*0.4})`;
+    ctx.font='bold 11px monospace'; ctx.textAlign='center';
+    ctx.fillText('⚠ DANGER ⚠',0,38);
+  } else if(s.kind==='asteroid') {
+    ctx.rotate(t*0.03);
+    // Rocky silhouette (polygon)
+    ctx.fillStyle='#887766'; ctx.strokeStyle='#554433'; ctx.lineWidth=2.5;
+    ctx.beginPath();
+    const pts=[[-22,-8],[-14,-24],[-2,-28],[12,-22],[25,-10],[22,8],[12,22],[0,28],[-14,20],[-24,8]];
+    ctx.moveTo(pts[0][0],pts[0][1]);
+    pts.slice(1).forEach(([px,py])=>ctx.lineTo(px,py)); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Surface craters
+    ctx.fillStyle='rgba(50,35,25,0.6)';
+    ctx.beginPath(); ctx.ellipse(-6,-6,7,5,0.3,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(9,8,5,4,-0.2,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(-4,13,4,3,0.5,0,Math.PI*2); ctx.fill();
+    // Rock sheen
+    ctx.fillStyle='rgba(200,180,150,0.25)'; ctx.beginPath(); ctx.ellipse(-5,-10,10,6,-0.3,0,Math.PI*2); ctx.fill();
+    // Dust trail
+    for(let i=1;i<=4;i++){
+      ctx.fillStyle=`rgba(180,160,130,${0.22-i*0.05})`;
+      ctx.beginPath(); ctx.ellipse(-i*14,i*6,6-i,4-i*0.5,0,0,Math.PI*2); ctx.fill();
+    }
+  } else if(s.kind==='gravity_wave') {
+    // Pulsing downward gravity rings
+    for(let i=0;i<4;i++){
+      const phase=(t*0.06+i*0.45)%(Math.PI*2);
+      const r=20+i*14+Math.sin(phase)*5;
+      const alpha=0.6-i*0.13;
+      ctx.strokeStyle=`rgba(120,80,255,${alpha})`;
+      ctx.lineWidth=3-i*0.5;
+      ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.stroke();
+    }
+    // Downward arrows
+    ctx.strokeStyle='rgba(180,120,255,0.85)'; ctx.lineWidth=2.5; ctx.lineCap='round';
+    const arrowY=Math.sin(t*0.09)*6;
+    [[-14,0],[0,0],[14,0]].forEach(([ax,ay])=>{
+      const by=ay+arrowY;
+      ctx.beginPath(); ctx.moveTo(ax,by-10); ctx.lineTo(ax,by+10); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ax-6,by+3); ctx.lineTo(ax,by+10); ctx.lineTo(ax+6,by+3); ctx.stroke();
+    });
+    // Center orb
+    const orb=ctx.createRadialGradient(0,0,0,0,0,14);
+    orb.addColorStop(0,'rgba(220,180,255,0.95)'); orb.addColorStop(1,'rgba(80,0,180,0.0)');
+    ctx.fillStyle=orb; ctx.beginPath(); ctx.arc(0,0,14,0,Math.PI*2); ctx.fill();
+    // Warning label
+    ctx.fillStyle='rgba(200,140,255,0.8)'; ctx.font='bold 10px monospace'; ctx.textAlign='center';
+    ctx.fillText('▼ GRAVITY ▼',0,40);
   }
   ctx.restore();
 }
@@ -1049,9 +1124,11 @@ function checkCollisions() {
   // Space objects
   for(const s of spaceObjects) {
     if(s.hit) continue;
-    if(Math.hypot(catX-s.x,catY-s.y)>58) continue;
+    const hitR = s.kind==='black_hole' ? 68 : 58;
+    if(Math.hypot(catX-s.x,catY-s.y)>hitR) continue;
     s.hit=true;
-    combo++; if(combo>maxCombo)maxCombo=combo; comboTimer=nextComboTimer();
+    const isHazard = s.kind==='black_hole'||s.kind==='asteroid'||s.kind==='gravity_wave';
+    if(!isHazard){ combo++; if(combo>maxCombo)maxCombo=combo; comboTimer=nextComboTimer(); }
     if(s.kind==='ufo'){
       catVY=-Math.max(Math.abs(catVY),14)-12;
       catVX+=6+Math.random()*6;
@@ -1071,6 +1148,35 @@ function checkCollisions() {
       shakePow=12;
       spawnParticles(catX,catY,'#88ff44',26,1.4);
       spawnPopup(catX,catY-60,'👾 ALIEN BOOST!','#88ff44');
+    } else if(s.kind==='black_hole'){
+      // Strong pull — yanks cat down hard, kills combo, strips speed
+      catVY=Math.max(catVY,0)+28+Math.random()*14;
+      catVX*=0.35;
+      catSpin=(Math.random()-0.5)*0.8;
+      combo=0;
+      shakePow=22;
+      spawnParticles(catX,catY,'#ff4400',36,1.8);
+      spawnParticles(catX,catY,'#220000',20,1.3);
+      spawnPopup(catX,catY-60,'🕳️ BLACK HOLE!','#ff4400');
+    } else if(s.kind==='asteroid'){
+      // Smacks cat downward and sideways
+      catVY=Math.max(catVY,0)+18+Math.random()*10;
+      catVX*=(Math.random()<0.5?-1:1)*0.6;
+      catSpin=(Math.random()-0.5)*1.2;
+      combo=Math.max(0,combo-3);
+      shakePow=18;
+      spawnParticles(catX,catY,'#aa8855',28,1.5);
+      spawnParticles(catX,catY,'#ccaa77',14,1.1);
+      spawnPopup(catX,catY-55,'☄️ ASTEROID HIT!','#cc8833');
+    } else if(s.kind==='gravity_wave'){
+      // Pulls cat sharply downward, momentum absorbed
+      catVY=Math.max(catVY,0)+22+Math.random()*8;
+      catVX*=0.55;
+      combo=Math.max(0,combo-2);
+      shakePow=14;
+      spawnParticles(catX,catY,'#9944ff',26,1.4);
+      spawnParticles(catX,catY,'#cc88ff',12,1.0);
+      spawnPopup(catX,catY-55,'▼ GRAVITY WAVE!','#aa55ff');
     }
     totalBounces++;
     groundedFrames=0; skidding=false;
