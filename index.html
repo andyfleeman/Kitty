@@ -87,6 +87,8 @@ canvas { display:block; }
 .swatch:active { transform:scale(0.95) !important; }
 .swatch.locked { opacity:0.4; cursor:not-allowed; filter:grayscale(0.7); }
 .swatch.locked:active { transform:none !important; }
+#comboBar { width:120px; height:4px; background:rgba(255,255,255,0.2); border-radius:2px; margin:5px auto 0; overflow:hidden; opacity:0; transition:opacity 0.2s; }
+#comboBarFill { height:100%; background:#ffdd00; border-radius:2px; transition:width 0.05s linear; }
 </style>
 </head>
 <body>
@@ -139,7 +141,7 @@ canvas { display:block; }
   </div>
 </div>
 
-<div id="comboBox"><div id="comboText"></div></div>
+<div id="comboBox"><div id="comboText"></div><div id="comboBar"><div id="comboBarFill"></div></div></div>
 <div id="instruct">Pull back on the cat to launch! 🐾</div>
 
 <canvas id="c"></canvas>
@@ -171,6 +173,9 @@ let totalBounces = 0;
 let shakeX = 0, shakeY = 0, shakePow = 0;
 let comboTimer = 0;
 let spaceObjects = [], spaceGenBand = 0;
+
+// Combo window shrinks at high combos — makes streaks feel earned
+function nextComboTimer() { return Math.max(72 - Math.floor(combo / 5) * 8, 40); }
 const CAT_COLORS = {
   orange: { body:'#ff8c42', head:'#ff9d57', outline:'#b85200', inner:'#ffccaa', stripe:'rgba(160,60,0,0.4)',   tail:'#ff8c42', tailLine:'#c25a00' },
   black:  { body:'#2d2d2d', head:'#3f3f3f', outline:'#111111', inner:'#5a4040', stripe:'rgba(0,0,0,0.45)',     tail:'#2d2d2d', tailLine:'#111111' },
@@ -197,17 +202,17 @@ function slingY() { return groundY - 95; }
 // ── WORLD GEN ──
 function generateWorld(toX) {
   while (worldGenX < toX + W * 3) {
-    worldGenX += 220 + Math.random() * 380;
+    worldGenX += 320 + Math.random() * 400;
 
     // trampoline variety
     const roll = Math.random();
-    if (roll < 0.5) {
+    if (roll < 0.28) {
       const kind = Math.random() < 0.4 ? (Math.random() < 0.5 ? 'super' : 'mega') : 'normal';
       trampolines.push({ x: worldGenX, w: 75 + Math.random() * 55, kind, anim: 0 });
     }
 
     // boosters
-    if (Math.random() < 0.65) {
+    if (Math.random() < 0.38) {
       const kinds = ['rocket','star','ring','tornado','geyser','orbit'];
       const weights = [0.22, 0.18, 0.18, 0.15, 0.15, 0.12];
       let r = Math.random(), kind = kinds[0];
@@ -787,11 +792,11 @@ function drawBand() {
 function generateSpaceObjects() {
   const altitude = groundY - catY;
   if(altitude < H * 0.5) return;
-  const band = Math.floor(altitude / (H * 0.55));
+  const band = Math.floor(altitude / (H * 0.9));
   while(spaceGenBand < band) {
     spaceGenBand++;
-    const y = groundY - spaceGenBand * H * 0.55 - Math.random() * H * 0.2;
-    const count = 1 + Math.floor(Math.random() * 2);
+    const y = groundY - spaceGenBand * H * 0.9 - Math.random() * H * 0.25;
+    const count = Math.random() < 0.35 ? 2 : 1;
     for(let i=0; i<count; i++) {
       const kinds = ['ufo','satellite','alien'];
       const k = kinds[Math.floor(Math.random()*kinds.length)];
@@ -913,7 +918,7 @@ function checkCollisions() {
       totalBounces++;
       const msgs={1:'Boing!',2:'Double!',3:'Triple!🔥',4:'On Fire!🔥',5:'SUPER HOT!🔥🔥',6:'INSANE!⚡',7:'GODLIKE!💥',8:'LEGENDARY!🌟'};
       spawnPopup(catX,catY-40,msgs[Math.min(combo,8)]||`x${combo}!! 🚀`,'#ffdd00');
-      comboTimer=90;
+      comboTimer=nextComboTimer();
       groundedFrames=0; skidding=false;
     }
   }
@@ -926,7 +931,7 @@ function checkCollisions() {
     b.hit=true;
     combo++;
     if(combo>maxCombo)maxCombo=combo;
-    comboTimer=90;
+    comboTimer=nextComboTimer();
     if(b.kind==='rocket'){
       catVX=Math.max(catVX,0)+14+Math.random()*5;
       catVY=-7-Math.random()*4;
@@ -981,7 +986,7 @@ function checkCollisions() {
     if(s.hit) continue;
     if(Math.hypot(catX-s.x,catY-s.y)>58) continue;
     s.hit=true;
-    combo++; if(combo>maxCombo)maxCombo=combo; comboTimer=90;
+    combo++; if(combo>maxCombo)maxCombo=combo; comboTimer=nextComboTimer();
     if(s.kind==='ufo'){
       catVY=-Math.max(Math.abs(catVY),14)-12;
       catVX+=6+Math.random()*6;
@@ -1010,6 +1015,8 @@ function checkCollisions() {
 // ── COMBO DISPLAY ──
 function updateComboHUD() {
   const el=document.getElementById('comboText');
+  const bar=document.getElementById('comboBar');
+  const fill=document.getElementById('comboBarFill');
   if(comboTimer>0){
     comboTimer--;
     if(combo>=2){
@@ -1017,10 +1024,15 @@ function updateComboHUD() {
       el.textContent=`x${combo} COMBO!`;
       el.style.fontSize=(36+Math.min(combo*4,30))+'px';
       el.style.color=combo>=6?'#ff4444':combo>=4?'#ff8800':'#ffdd00';
-    } else { el.style.opacity='0'; }
+      bar.style.opacity='1';
+      // Bar color shifts red as window closes
+      const pct=comboTimer/72;
+      fill.style.width=(pct*100)+'%';
+      fill.style.background=pct<0.3?'#ff4444':pct<0.6?'#ff8800':'#ffdd00';
+    } else { el.style.opacity='0'; bar.style.opacity='0'; }
   } else {
-    if(combo>1) combo=1;
-    el.style.opacity='0';
+    combo=0; // true reset — gap in hits ends the streak
+    el.style.opacity='0'; bar.style.opacity='0';
   }
 }
 
