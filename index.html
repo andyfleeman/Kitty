@@ -172,8 +172,8 @@ let combo = 0, maxCombo = 0;
 let totalBounces = 0;
 let shakeX = 0, shakeY = 0, shakePow = 0;
 let comboTimer = 0;
-let spaceObjects = [], spaceGenBand = 0;
-let stratosphereObjects = [], stratGenBand = 0;
+let spaceObjects = [], spaceGenX = 0;
+let stratosphereObjects = [], stratGenX = 0;
 
 // Combo window shrinks at high combos — makes streaks feel earned
 function nextComboTimer() { return Math.max(72 - Math.floor(combo / 5) * 8, 40); }
@@ -242,8 +242,8 @@ function generateWorld(toX) {
 function initGame() {
   groundY = H * 0.78;
   cam = 0; camY = 0;
-  spaceObjects = []; spaceGenBand = 0;
-  stratosphereObjects = []; stratGenBand = 0;
+  spaceObjects = []; spaceGenX = 300;
+  stratosphereObjects = []; stratGenX = 300;
   catX = SLING_X; catY = slingY() - 10;
   catVX = 0; catVY = 0; catAngle = 0; catSpin = 0;
   launched = false; dragging = false;
@@ -857,24 +857,19 @@ function drawBand() {
 
 // ── SPACE OBJECTS ──
 function generateStratosphereObjects() {
-  const altitude = groundY - catY;
-  if(altitude < H * 0.25) return;
-  const band = Math.floor(altitude / (H * 0.55));
-  while(stratGenBand < band) {
-    stratGenBand++;
-    const y = groundY - stratGenBand * H * 0.55 - Math.random() * H * 0.18;
-    const count = Math.random() < 0.35 ? 2 : 1;
-    for(let i=0; i<count; i++) {
-      const kinds = ['plane','balloon','pterodactyl'];
-      const k = kinds[Math.floor(Math.random()*kinds.length)];
-      const vx = k==='plane' ? (Math.random()<0.5?1:-1)*(1.8+Math.random()*1.5)
-               : k==='pterodactyl' ? (Math.random()<0.5?1:-1)*(0.7+Math.random()*0.6)
-               : (Math.random()-0.5)*0.3;
-      const vy = k==='balloon' ? -(0.25+Math.random()*0.25) : 0;
-      stratosphereObjects.push({ x:catX+(Math.random()-0.5)*W*1.4+W*0.3, y, kind:k, anim:Math.random()*100, hit:false, vx, vy });
-    }
+  const ahead = cam + W * 3;
+  while(stratGenX < ahead) {
+    stratGenX += 260 + Math.random() * 340;
+    const y = groundY - (H * 0.28 + Math.random() * H * 0.95);
+    const kinds = ['plane','balloon','pterodactyl'];
+    const k = kinds[Math.floor(Math.random()*kinds.length)];
+    const vx = k==='plane' ? (Math.random()<0.5?1:-1)*(1.8+Math.random()*1.5)
+             : k==='pterodactyl' ? (Math.random()<0.5?1:-1)*(0.7+Math.random()*0.6)
+             : (Math.random()-0.5)*0.3;
+    const vy = k==='balloon' ? -(0.25+Math.random()*0.25) : 0;
+    stratosphereObjects.push({ x:stratGenX, y, kind:k, anim:Math.random()*100, hit:false, vx, vy });
   }
-  if(stratosphereObjects.length > 60) stratosphereObjects = stratosphereObjects.filter(s=>!s.hit);
+  if(stratosphereObjects.length > 80) stratosphereObjects = stratosphereObjects.filter(s=>!s.hit);
 }
 
 function drawStratosphereObject(s) {
@@ -974,23 +969,17 @@ function drawStratosphereObjects() {
 }
 
 function generateSpaceObjects() {
-  const altitude = groundY - catY;
-  if(altitude < H * 0.5) return;
-  const band = Math.floor(altitude / (H * 0.9));
-  while(spaceGenBand < band) {
-    spaceGenBand++;
-    const y = groundY - spaceGenBand * H * 0.9 - Math.random() * H * 0.25;
-    const count = Math.random() < 0.35 ? 2 : 1;
-    for(let i=0; i<count; i++) {
-      const upKinds = ['ufo','satellite','alien'];
-      const downKinds = ['black_hole','asteroid','gravity_wave'];
-      const pool = Math.random() < 0.5 ? upKinds : downKinds;
-      const k = pool[Math.floor(Math.random()*pool.length)];
-      spaceObjects.push({ x:catX+(Math.random()-0.5)*W*1.2+W*0.3, y, kind:k, anim:Math.random()*100, hit:false, vx:(Math.random()-0.5)*0.7 });
-    }
+  const ahead = cam + W * 3;
+  while(spaceGenX < ahead) {
+    spaceGenX += 300 + Math.random() * 400;
+    const y = groundY - (H * 1.05 + Math.random() * H * 2.4);
+    const upKinds = ['ufo','satellite','alien'];
+    const downKinds = ['black_hole','asteroid','gravity_wave'];
+    const pool = Math.random() < 0.5 ? upKinds : downKinds;
+    const k = pool[Math.floor(Math.random()*pool.length)];
+    spaceObjects.push({ x:spaceGenX, y, kind:k, anim:Math.random()*100, hit:false, vx:(Math.random()-0.5)*0.7 });
   }
-  // Clean up old hit ones
-  if(spaceObjects.length > 60) spaceObjects = spaceObjects.filter(s=>!s.hit);
+  if(spaceObjects.length > 80) spaceObjects = spaceObjects.filter(s=>!s.hit);
 }
 
 function drawSpaceObject(s) {
