@@ -170,6 +170,7 @@ let combo = 0, maxCombo = 0;
 let totalBounces = 0;
 let shakeX = 0, shakeY = 0, shakePow = 0;
 let comboTimer = 0;
+let spaceObjects = [], spaceGenBand = 0;
 const CAT_COLORS = {
   orange: { body:'#ff8c42', head:'#ff9d57', outline:'#b85200', inner:'#ffccaa', stripe:'rgba(160,60,0,0.4)',   tail:'#ff8c42', tailLine:'#c25a00' },
   black:  { body:'#2d2d2d', head:'#3f3f3f', outline:'#111111', inner:'#5a4040', stripe:'rgba(0,0,0,0.45)',     tail:'#2d2d2d', tailLine:'#111111' },
@@ -207,14 +208,15 @@ function generateWorld(toX) {
 
     // boosters
     if (Math.random() < 0.65) {
-      const kinds = ['rocket','star','ring','tornado'];
-      const weights = [0.3, 0.25, 0.25, 0.2];
+      const kinds = ['rocket','star','ring','tornado','geyser','orbit'];
+      const weights = [0.22, 0.18, 0.18, 0.15, 0.15, 0.12];
       let r = Math.random(), kind = kinds[0];
       let acc = 0;
       for (let i = 0; i < kinds.length; i++) { acc += weights[i]; if (r < acc) { kind = kinds[i]; break; } }
+      const by = kind==='geyser' ? groundY-55 : groundY-90-Math.random()*210;
       boosters.push({
         x: worldGenX + (Math.random() - 0.5) * 150,
-        y: groundY - 90 - Math.random() * 210,
+        y: by,
         kind, anim: Math.random() * 100, hit: false
       });
     }
@@ -234,6 +236,7 @@ function generateWorld(toX) {
 function initGame() {
   groundY = H * 0.78;
   cam = 0; camY = 0;
+  spaceObjects = []; spaceGenBand = 0;
   catX = SLING_X; catY = slingY() - 10;
   catVX = 0; catVY = 0; catAngle = 0; catSpin = 0;
   launched = false; dragging = false;
@@ -338,23 +341,53 @@ function lerpColor(a, b, t) { return a.map((v,i) => Math.round(v + (b[i]-v)*t));
 
 function drawBg() {
   const prog = Math.min(cam / 9000, 1);
-  const t = Math.sin(prog * Math.PI);
-  const skyT = lerpColor([18,10,72], [255,80,110], prog);
-  const skyB = lerpColor([70,25,145], [255,150,70], prog);
+  const altitude = Math.max(0, groundY - catY);
+  const spaceT = Math.min(altitude / (H * 1.4), 1);
+
+  // Sky gradient: transitions from night/sunset → deep space
+  const skyT = lerpColor(lerpColor([18,10,72],[255,80,110],prog), [2,2,18], spaceT);
+  const skyB = lerpColor(lerpColor([70,25,145],[255,150,70],prog), [4,3,28], spaceT);
+  const skyBot = lerpColor([26,8,0], [0,0,10], spaceT);
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, `rgb(${skyT})`);
   g.addColorStop(0.72, `rgb(${skyB})`);
-  g.addColorStop(1, '#1a0800');
+  g.addColorStop(1, `rgb(${skyBot})`);
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  // Moon/sun
+
+  // Nebula haze (appears in space zone)
+  if (spaceT > 0.25) {
+    const na = (spaceT - 0.25) * 0.35;
+    ctx.fillStyle = `rgba(60,15,100,${na})`; ctx.beginPath(); ctx.ellipse(W*0.25,H*0.35,W*0.45,H*0.22,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = `rgba(10,40,110,${na*0.8})`; ctx.beginPath(); ctx.ellipse(W*0.72,H*0.55,W*0.38,H*0.18,0.4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = `rgba(90,0,80,${na*0.6})`; ctx.beginPath(); ctx.ellipse(W*0.55,H*0.2,W*0.3,H*0.12,-.3,0,Math.PI*2); ctx.fill();
+  }
+
+  // Decorative background planets (appear as altitude grows)
+  if (spaceT > 0.15) {
+    const pa = Math.min((spaceT - 0.15) / 0.5, 1);
+    // Planet 1 — ringed orange/red
+    ctx.globalAlpha = pa * 0.85;
+    ctx.fillStyle = '#c86030'; ctx.beginPath(); ctx.arc(W*0.14, H*0.22, 34, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#d87840'; ctx.beginPath(); ctx.ellipse(W*0.14, H*0.22, 34, 10, 0, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = 'rgba(200,120,60,0.6)'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.ellipse(W*0.14, H*0.22, 55, 13, 0.25, 0, Math.PI*2); ctx.stroke();
+    // Planet 2 — blue gas giant
+    ctx.fillStyle = '#2855aa'; ctx.beginPath(); ctx.arc(W*0.88, H*0.68, 22, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(100,160,220,0.5)'; ctx.beginPath(); ctx.ellipse(W*0.88, H*0.66, 22, 8, 0, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // Moon/sun (fades as we reach space)
+  const moonFade = 1 - spaceT * 0.85;
   const moonX = W * 0.78, moonY = H * 0.12;
   const glow = ctx.createRadialGradient(moonX, moonY, 8, moonX, moonY, 55);
-  glow.addColorStop(0, `rgba(255,255,180,${0.6 - prog * 0.3})`);
+  glow.addColorStop(0, `rgba(255,255,180,${(0.6 - prog * 0.3) * moonFade})`);
   glow.addColorStop(1, 'rgba(255,200,80,0)');
   ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(moonX, moonY, 55, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = `rgba(255,255,210,${0.9 - prog * 0.2})`;
+  ctx.fillStyle = `rgba(255,255,210,${(0.9 - prog * 0.2) * moonFade})`;
   ctx.beginPath(); ctx.arc(moonX, moonY, 18, 0, Math.PI*2); ctx.fill();
-  // Combo heat overlay — sky ignites at high combos
+
+  // Combo heat overlay
   if (combo >= 5) {
     const ci = Math.min((combo - 4) / 16, 1);
     const heat = ctx.createLinearGradient(0, 0, 0, H);
@@ -542,6 +575,25 @@ function drawBooster(b) {
     }
     ctx.fillStyle='rgba(220,180,255,0.5)'; ctx.beginPath(); ctx.ellipse(0,24,14,5,0,0,Math.PI*2); ctx.fill();
     ctx.font='18px serif'; ctx.textAlign='center'; ctx.fillText('🌀',0,6);
+  } else if (b.kind === 'geyser') {
+    const pulse=1+Math.sin(t*0.18)*0.1;
+    ctx.scale(pulse,1);
+    const grad=ctx.createLinearGradient(0,20,0,-55);
+    grad.addColorStop(0,'rgba(80,180,255,0)'); grad.addColorStop(0.35,'rgba(100,210,255,0.85)'); grad.addColorStop(1,'rgba(220,245,255,0.95)');
+    ctx.fillStyle=grad; ctx.beginPath(); ctx.ellipse(0,-18,11,44,0,0,Math.PI*2); ctx.fill();
+    for(let i=0;i<5;i++){const da=(i/5)*Math.PI*2+t*0.25;const dr=14+i*5;ctx.fillStyle=`rgba(120,210,255,${0.65-i*0.1})`;ctx.beginPath();ctx.arc(Math.sin(da)*7-4+i,-12-dr,3.5,0,Math.PI*2);ctx.fill();}
+    ctx.shadowColor='#44aaff'; ctx.shadowBlur=18;
+    ctx.strokeStyle='rgba(150,225,255,0.7)'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(0,0,18,0,Math.PI*2); ctx.stroke();
+    ctx.shadowBlur=0;
+    ctx.font='16px serif'; ctx.textAlign='center'; ctx.fillText('💧',0,6);
+  } else if (b.kind === 'orbit') {
+    ctx.rotate(t*0.07);
+    ctx.shadowColor='#00ccff'; ctx.shadowBlur=20;
+    ctx.strokeStyle='rgba(80,210,255,0.92)'; ctx.lineWidth=5; ctx.beginPath(); ctx.arc(0,0,28,0,Math.PI*2); ctx.stroke();
+    ctx.strokeStyle='rgba(180,240,255,0.6)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,20,0,Math.PI*2); ctx.stroke();
+    ctx.shadowBlur=0;
+    for(let i=0;i<4;i++){const a=(i/4)*Math.PI*2;ctx.fillStyle=`hsl(${t*4+i*90},100%,70%)`;ctx.beginPath();ctx.arc(Math.cos(a)*28,Math.sin(a)*28,4,0,Math.PI*2);ctx.fill();}
+    ctx.font='14px serif'; ctx.textAlign='center'; ctx.fillText('⚡',0,5);
   }
   ctx.restore();
 }
@@ -731,6 +783,111 @@ function drawBand() {
   ctx.beginPath(); ctx.moveTo(sx+32,sy-28); ctx.lineTo(catX-cam,catY); ctx.stroke();
 }
 
+// ── SPACE OBJECTS ──
+function generateSpaceObjects() {
+  const altitude = groundY - catY;
+  if(altitude < H * 0.5) return;
+  const band = Math.floor(altitude / (H * 0.55));
+  while(spaceGenBand < band) {
+    spaceGenBand++;
+    const y = groundY - spaceGenBand * H * 0.55 - Math.random() * H * 0.2;
+    const count = 1 + Math.floor(Math.random() * 2);
+    for(let i=0; i<count; i++) {
+      const kinds = ['ufo','satellite','alien'];
+      const k = kinds[Math.floor(Math.random()*kinds.length)];
+      spaceObjects.push({ x:catX+(Math.random()-0.5)*W*1.2+W*0.3, y, kind:k, anim:Math.random()*100, hit:false, vx:(Math.random()-0.5)*0.7 });
+    }
+  }
+  // Clean up old hit ones
+  if(spaceObjects.length > 60) spaceObjects = spaceObjects.filter(s=>!s.hit);
+}
+
+function drawSpaceObject(s) {
+  if(s.hit) return;
+  const sx=s.x-cam, sy=s.y;
+  if(sx<-120||sx>W+120) return;
+  s.anim++; s.x+=s.vx;
+  ctx.save(); ctx.translate(sx,sy);
+  const t=s.anim;
+  if(s.kind==='ufo') {
+    // Beam glow below
+    const beam=ctx.createLinearGradient(0,8,0,55);
+    beam.addColorStop(0,'rgba(80,255,180,0.3)'); beam.addColorStop(1,'rgba(80,255,180,0)');
+    ctx.fillStyle=beam; ctx.beginPath(); ctx.moveTo(-20,8); ctx.lineTo(20,8); ctx.lineTo(35,55); ctx.lineTo(-35,55); ctx.closePath(); ctx.fill();
+    // Saucer body
+    ctx.fillStyle='#557799'; ctx.strokeStyle='#88aabb'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(0,5,40,12,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Dome
+    ctx.fillStyle='#334455'; ctx.strokeStyle='#88aabb'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.ellipse(0,-4,20,15,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Dome window glow
+    ctx.fillStyle='rgba(80,255,160,0.5)'; ctx.beginPath(); ctx.ellipse(0,-5,12,9,0,0,Math.PI*2); ctx.fill();
+    // Spinning lights
+    for(let i=0;i<6;i++){const a=(i/6)*Math.PI*2+t*0.06;ctx.fillStyle=`hsl(${t*4+i*60},100%,65%)`;ctx.beginPath();ctx.arc(Math.cos(a)*30,5+Math.sin(a)*4,3.5,0,Math.PI*2);ctx.fill();}
+    // Outer glow
+    const glow=ctx.createRadialGradient(0,0,8,0,0,52);
+    glow.addColorStop(0,'rgba(80,255,160,0.18)'); glow.addColorStop(1,'rgba(80,255,160,0)');
+    ctx.fillStyle=glow; ctx.beginPath(); ctx.arc(0,0,52,0,Math.PI*2); ctx.fill();
+  } else if(s.kind==='satellite') {
+    ctx.rotate(t*0.015);
+    // Body
+    ctx.fillStyle='#99aabb'; ctx.strokeStyle='#667788'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.rect(-14,-10,28,20); ctx.fill(); ctx.stroke();
+    // Metallic sheen
+    ctx.fillStyle='rgba(200,220,240,0.3)'; ctx.beginPath(); ctx.rect(-14,-10,28,7); ctx.fill();
+    // Solar panels
+    ctx.fillStyle='rgba(40,80,200,0.85)'; ctx.strokeStyle='#3366cc'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.rect(-54,-8,34,16); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.rect(20,-8,34,16); ctx.fill(); ctx.stroke();
+    // Panel grid
+    ctx.strokeStyle='rgba(120,180,255,0.5)'; ctx.lineWidth=0.8;
+    for(let x=-48;x<-20;x+=7){ctx.beginPath();ctx.moveTo(x,-8);ctx.lineTo(x,8);ctx.stroke();}
+    for(let x=27;x<54;x+=7){ctx.beginPath();ctx.moveTo(x,-8);ctx.lineTo(x,8);ctx.stroke();}
+    // Antenna
+    ctx.strokeStyle='#aabbcc'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(0,-10); ctx.lineTo(0,-24); ctx.stroke();
+    ctx.fillStyle='#aabbcc'; ctx.beginPath(); ctx.arc(0,-24,2.5,0,Math.PI*2); ctx.fill();
+    // Blink
+    ctx.fillStyle=`rgba(255,80,80,${0.5+Math.sin(t*0.12)*0.5})`; ctx.beginPath(); ctx.arc(0,-24,2.5,0,Math.PI*2); ctx.fill();
+  } else if(s.kind==='alien') {
+    const wave=Math.sin(t*0.08)*0.06;
+    ctx.rotate(wave);
+    // Body
+    ctx.fillStyle='#44cc44'; ctx.strokeStyle='#226622'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(0,8,14,20,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Big head
+    ctx.beginPath(); ctx.ellipse(0,-16,20,19,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Huge eyes
+    ctx.fillStyle='#050a05';
+    ctx.beginPath(); ctx.ellipse(-7,-18,7,10,0.15,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(7,-18,7,10,-0.15,0,Math.PI*2); ctx.fill();
+    // Eye shine
+    ctx.fillStyle='rgba(80,200,80,0.55)';
+    ctx.beginPath(); ctx.arc(-8,-21,2.5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(6,-21,2.5,0,Math.PI*2); ctx.fill();
+    // Antennae
+    ctx.strokeStyle='#226622'; ctx.lineWidth=1.8;
+    ctx.beginPath(); ctx.moveTo(-7,-34); ctx.lineTo(-12,-44); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(7,-34); ctx.lineTo(12,-44); ctx.stroke();
+    ctx.fillStyle='#ffdd44';
+    ctx.beginPath(); ctx.arc(-12,-45,3,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(12,-45,3,0,Math.PI*2); ctx.fill();
+    // Waving arms
+    const wv=Math.sin(t*0.14)*18;
+    ctx.strokeStyle='#44cc44'; ctx.lineWidth=7; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-14,2); ctx.lineTo(-28,-10+wv); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(14,2); ctx.lineTo(28,-10-wv); ctx.stroke();
+    ctx.strokeStyle='#226622'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(-14,2); ctx.lineTo(-28,-10+wv); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(14,2); ctx.lineTo(28,-10-wv); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawSpaceObjects() {
+  for(const s of spaceObjects) drawSpaceObject(s);
+}
+
 // ── COLLISION ──
 function checkCollisions() {
   const R=28;
@@ -797,8 +954,54 @@ function checkCollisions() {
       shakePow=9;
       spawnParticles(catX,catY,'#cc88ff',22,1.2);
       spawnPopup(catX,catY-50,'🌀 TORNADO!','#cc88ff');
+    } else if(b.kind==='geyser'){
+      catVY=-Math.max(Math.abs(catVY)+6,30)-Math.random()*10;
+      catVX*=0.8;
+      catSpin=(Math.random()-0.5)*0.5;
+      shakePow=16;
+      spawnParticles(catX,catY,'#44aaff',32,1.5);
+      spawnParticles(catX,catY,'#ffffff',16,1.1);
+      spawnPopup(catX,catY-55,'💧 GEYSER!','#44ccff');
+    } else if(b.kind==='orbit'){
+      catVY=-Math.max(Math.abs(catVY)+4,24)-Math.random()*8;
+      catVX+=4+Math.random()*4;
+      catSpin*=0.2;
+      shakePow=12;
+      spawnParticles(catX,catY,'#00ccff',26,1.4);
+      spawnParticles(catX,catY,'#aaeeff',12,0.9);
+      spawnPopup(catX,catY-55,'⚡ ORBIT BOOST!','#00ccff');
     }
     catVX += Math.min(combo, 12) * 0.3;
+    totalBounces++;
+    groundedFrames=0; skidding=false;
+  }
+
+  // Space objects
+  for(const s of spaceObjects) {
+    if(s.hit) continue;
+    if(Math.hypot(catX-s.x,catY-s.y)>58) continue;
+    s.hit=true;
+    combo++; if(combo>maxCombo)maxCombo=combo; comboTimer=90;
+    if(s.kind==='ufo'){
+      catVY=-Math.max(Math.abs(catVY),14)-12;
+      catVX+=6+Math.random()*6;
+      shakePow=16;
+      spawnParticles(catX,catY,'#44ffaa',30,1.6);
+      spawnParticles(catX,catY,'#00ff88',14,1.2);
+      spawnPopup(catX,catY-60,'👽 ABDUCTED!','#44ff88');
+    } else if(s.kind==='satellite'){
+      catVY=-Math.max(Math.abs(catVY),12)-8;
+      catVX+=8;
+      shakePow=10;
+      spawnParticles(catX,catY,'#aaccff',22,1.2);
+      spawnPopup(catX,catY-55,'🛰️ SATELLITE!','#aaccff');
+    } else if(s.kind==='alien'){
+      catVY-=22;
+      catVX+=3+Math.random()*4;
+      shakePow=12;
+      spawnParticles(catX,catY,'#88ff44',26,1.4);
+      spawnPopup(catX,catY-60,'👾 ALIEN BOOST!','#88ff44');
+    }
     totalBounces++;
     groundedFrames=0; skidding=false;
   }
@@ -894,6 +1097,7 @@ function update() {
   if(catTrail.length>18)catTrail.shift();
 
   generateWorld(cam);
+  generateSpaceObjects();
   for(const u of unicorns){u.anim++;u.x+=u.dir*0.9;if(u.x>cam+W+300)u.dir=-1;if(u.x<cam-300)u.dir=1;}
   checkCollisions();
   updateParticles();
@@ -927,6 +1131,7 @@ function draw() {
   for(const cl of clouds){cl.x-=cl.speed;if(cl.x<cam-cl.w-50)cl.x=cam+W+cl.w;drawCloud(cl.x-cam,cl.y,cl.w);}
   for(const u of unicorns){if(u.x<cam-120||u.x>cam+W+120)continue;drawUnicorn(u.x-cam,groundY-5,u.dir,u.anim);}
   drawGround();
+  drawSpaceObjects();
   drawSpeedLines();
 
   // Cat trail
