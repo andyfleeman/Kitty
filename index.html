@@ -202,17 +202,17 @@ function slingY() { return groundY - 95; }
 // ── WORLD GEN ──
 function generateWorld(toX) {
   while (worldGenX < toX + W * 3) {
-    worldGenX += 240 + Math.random() * 380;
+    worldGenX += 220 + Math.random() * 380;
 
     // trampoline variety
     const roll = Math.random();
-    if (roll < 0.40) {
+    if (roll < 0.50) {
       const kind = Math.random() < 0.4 ? (Math.random() < 0.5 ? 'super' : 'mega') : 'normal';
       trampolines.push({ x: worldGenX, w: 75 + Math.random() * 55, kind, anim: 0 });
     }
 
     // boosters
-    if (Math.random() < 0.52) {
+    if (Math.random() < 0.65) {
       const kinds = ['rocket','star','ring','tornado','geyser','orbit'];
       const weights = [0.22, 0.18, 0.18, 0.15, 0.15, 0.12];
       let r = Math.random(), kind = kinds[0];
