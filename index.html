@@ -173,6 +173,7 @@ let totalBounces = 0;
 let shakeX = 0, shakeY = 0, shakePow = 0;
 let comboTimer = 0;
 let spaceObjects = [], spaceGenBand = 0;
+let stratosphereObjects = [], stratGenBand = 0;
 
 // Combo window shrinks at high combos — makes streaks feel earned
 function nextComboTimer() { return Math.max(72 - Math.floor(combo / 5) * 8, 40); }
@@ -242,6 +243,7 @@ function initGame() {
   groundY = H * 0.78;
   cam = 0; camY = 0;
   spaceObjects = []; spaceGenBand = 0;
+  stratosphereObjects = []; stratGenBand = 0;
   catX = SLING_X; catY = slingY() - 10;
   catVX = 0; catVY = 0; catAngle = 0; catSpin = 0;
   launched = false; dragging = false;
@@ -854,6 +856,123 @@ function drawBand() {
 }
 
 // ── SPACE OBJECTS ──
+function generateStratosphereObjects() {
+  const altitude = groundY - catY;
+  if(altitude < H * 0.25) return;
+  const band = Math.floor(altitude / (H * 0.55));
+  while(stratGenBand < band) {
+    stratGenBand++;
+    const y = groundY - stratGenBand * H * 0.55 - Math.random() * H * 0.18;
+    const count = Math.random() < 0.35 ? 2 : 1;
+    for(let i=0; i<count; i++) {
+      const kinds = ['plane','balloon','pterodactyl'];
+      const k = kinds[Math.floor(Math.random()*kinds.length)];
+      const vx = k==='plane' ? (Math.random()<0.5?1:-1)*(1.8+Math.random()*1.5)
+               : k==='pterodactyl' ? (Math.random()<0.5?1:-1)*(0.7+Math.random()*0.6)
+               : (Math.random()-0.5)*0.3;
+      const vy = k==='balloon' ? -(0.25+Math.random()*0.25) : 0;
+      stratosphereObjects.push({ x:catX+(Math.random()-0.5)*W*1.4+W*0.3, y, kind:k, anim:Math.random()*100, hit:false, vx, vy });
+    }
+  }
+  if(stratosphereObjects.length > 60) stratosphereObjects = stratosphereObjects.filter(s=>!s.hit);
+}
+
+function drawStratosphereObject(s) {
+  if(s.hit) return;
+  const sx=s.x-cam, sy=s.y;
+  if(sx<-220||sx>W+220) return;
+  s.anim++; s.x+=s.vx; s.y+=s.vy;
+  ctx.save(); ctx.translate(sx,sy);
+  const t=s.anim;
+  if(s.kind==='plane') {
+    ctx.scale(s.vx<0?-1:1,1);
+    // Fuselage
+    ctx.fillStyle='#ddeeff'; ctx.strokeStyle='#99aabb'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(0,0,42,11,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Nose cone
+    ctx.fillStyle='#bbccdd';
+    ctx.beginPath(); ctx.moveTo(42,0); ctx.bezierCurveTo(56,-3,62,0,56,5); ctx.bezierCurveTo(56,5,42,8,42,0); ctx.fill();
+    // Wings
+    ctx.fillStyle='#aabbcc'; ctx.strokeStyle='#778899'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(5,-11); ctx.lineTo(-18,-36); ctx.lineTo(-30,-36); ctx.lineTo(-15,-11); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(5,11); ctx.lineTo(-18,36); ctx.lineTo(-30,36); ctx.lineTo(-15,11); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // Tail fin
+    ctx.beginPath(); ctx.moveTo(-32,-11); ctx.lineTo(-50,-27); ctx.lineTo(-54,-11); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // Windows
+    ctx.fillStyle='rgba(100,180,255,0.8)';
+    for(let i=0;i<4;i++){ ctx.beginPath(); ctx.ellipse(18-i*12,-4,4.5,5.5,0.1,0,Math.PI*2); ctx.fill(); }
+    // Engine exhaust glow
+    ctx.fillStyle=`rgba(255,200,100,${0.4+Math.sin(t*0.2)*0.2})`;
+    ctx.beginPath(); ctx.arc(-14,-25,5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-14,25,5,0,Math.PI*2); ctx.fill();
+    // Contrail
+    ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-44,0); ctx.lineTo(-80,0); ctx.stroke();
+  } else if(s.kind==='balloon') {
+    const bob=Math.sin(t*0.04)*4;
+    // Colorful stripe segments
+    const stripes=['#ff4466','#ff8800','#ffdd00','#44cc44','#4488ff','#cc44ff'];
+    stripes.forEach((c,i)=>{
+      const a=(i/stripes.length)*Math.PI*2-Math.PI/2;
+      const b2=((i+1)/stripes.length)*Math.PI*2-Math.PI/2;
+      ctx.fillStyle=c; ctx.beginPath(); ctx.moveTo(0,bob); ctx.arc(0,bob,38,a,b2); ctx.closePath(); ctx.fill();
+    });
+    // Sheen highlight
+    ctx.fillStyle='rgba(255,255,255,0.2)';
+    ctx.beginPath(); ctx.ellipse(-12,bob-18,10,18,-0.3,0,Math.PI*2); ctx.fill();
+    // Outline
+    ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(0,bob,38,0,Math.PI*2); ctx.stroke();
+    // Ropes
+    ctx.strokeStyle='#887755'; ctx.lineWidth=1.2;
+    [[-20,bob+36],[0,bob+38],[20,bob+36]].forEach(([rx,ry])=>{
+      ctx.beginPath(); ctx.moveTo(rx*0.5,bob+38); ctx.lineTo(rx,ry+14); ctx.stroke();
+    });
+    // Basket
+    ctx.fillStyle='#aa7744'; ctx.strokeStyle='#774422'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.roundRect(-18,bob+50,36,22,3); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle='rgba(80,40,10,0.35)'; ctx.lineWidth=1;
+    for(let i=1;i<3;i++){ctx.beginPath();ctx.moveTo(-18,bob+50+i*7);ctx.lineTo(18,bob+50+i*7);ctx.stroke();}
+    ctx.beginPath();ctx.moveTo(0,bob+50);ctx.lineTo(0,bob+72);ctx.stroke();
+    // Waving passenger
+    ctx.fillStyle='#ffcc88'; ctx.beginPath(); ctx.arc(0,bob+57,5,0,Math.PI*2); ctx.fill();
+    const wv=Math.sin(t*0.12)*14;
+    ctx.strokeStyle='#ffcc88'; ctx.lineWidth=2.5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(0,bob+62); ctx.lineTo(-9+wv,bob+54); ctx.stroke();
+  } else if(s.kind==='pterodactyl') {
+    const flap=Math.sin(t*0.18)*0.65;
+    ctx.scale(s.vx<0?-1:1,1);
+    // Wings
+    ctx.fillStyle='rgba(110,85,68,0.88)'; ctx.strokeStyle='#443322'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(-2,-5);
+    ctx.bezierCurveTo(-22,-5-flap*32,-58,flap*22-12,-65,flap*38-6);
+    ctx.bezierCurveTo(-58,flap*22+6,-22,5+flap*18,-2,5); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-2,-5);
+    ctx.bezierCurveTo(-22,-5+flap*32,-58,-flap*22-12,-65,-flap*38-6);
+    ctx.bezierCurveTo(-58,-flap*22+6,-22,5-flap*18,-2,5); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // Body
+    ctx.fillStyle='#776655'; ctx.strokeStyle='#443322'; ctx.lineWidth=1.8;
+    ctx.beginPath(); ctx.ellipse(0,0,20,9,0.1,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Tail
+    ctx.beginPath(); ctx.moveTo(-18,0); ctx.lineTo(-32,4); ctx.lineTo(-30,-4); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // Head
+    ctx.beginPath(); ctx.ellipse(18,-8,13,9,0.3,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    // Crest
+    ctx.beginPath(); ctx.moveTo(10,-14); ctx.lineTo(22,-32); ctx.lineTo(28,-14); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // Beak
+    ctx.fillStyle='#aaa090';
+    ctx.beginPath(); ctx.moveTo(28,-10); ctx.lineTo(52,-13); ctx.lineTo(52,-9); ctx.lineTo(28,-6); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // Eye
+    ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(22,-10,2.5,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.55)'; ctx.beginPath(); ctx.arc(23,-11,1,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawStratosphereObjects() {
+  for(const s of stratosphereObjects) drawStratosphereObject(s);
+}
+
 function generateSpaceObjects() {
   const altitude = groundY - catY;
   if(altitude < H * 0.5) return;
@@ -1149,35 +1268,67 @@ function checkCollisions() {
       spawnParticles(catX,catY,'#88ff44',26,1.4);
       spawnPopup(catX,catY-60,'👾 ALIEN BOOST!','#88ff44');
     } else if(s.kind==='black_hole'){
-      // Strong pull — yanks cat down hard, kills combo, strips speed
-      catVY=Math.max(catVY,0)+28+Math.random()*14;
-      catVX*=0.35;
-      catSpin=(Math.random()-0.5)*0.8;
-      combo=0;
-      shakePow=22;
-      spawnParticles(catX,catY,'#ff4400',36,1.8);
-      spawnParticles(catX,catY,'#220000',20,1.3);
+      catVY=Math.max(catVY,0)+16+Math.random()*8;
+      catVX*=0.5;
+      catSpin=(Math.random()-0.5)*0.6;
+      combo=Math.max(0,combo-5);
+      shakePow=16;
+      spawnParticles(catX,catY,'#ff4400',28,1.6);
+      spawnParticles(catX,catY,'#220000',14,1.2);
       spawnPopup(catX,catY-60,'🕳️ BLACK HOLE!','#ff4400');
     } else if(s.kind==='asteroid'){
-      // Smacks cat downward and sideways
-      catVY=Math.max(catVY,0)+18+Math.random()*10;
-      catVX*=(Math.random()<0.5?-1:1)*0.6;
-      catSpin=(Math.random()-0.5)*1.2;
-      combo=Math.max(0,combo-3);
-      shakePow=18;
-      spawnParticles(catX,catY,'#aa8855',28,1.5);
-      spawnParticles(catX,catY,'#ccaa77',14,1.1);
-      spawnPopup(catX,catY-55,'☄️ ASTEROID HIT!','#cc8833');
-    } else if(s.kind==='gravity_wave'){
-      // Pulls cat sharply downward, momentum absorbed
-      catVY=Math.max(catVY,0)+22+Math.random()*8;
-      catVX*=0.55;
+      catVY=Math.max(catVY,0)+12+Math.random()*6;
+      catVX*=(Math.random()<0.5?-1:1)*0.7;
+      catSpin=(Math.random()-0.5)*0.9;
       combo=Math.max(0,combo-2);
       shakePow=14;
-      spawnParticles(catX,catY,'#9944ff',26,1.4);
-      spawnParticles(catX,catY,'#cc88ff',12,1.0);
+      spawnParticles(catX,catY,'#aa8855',22,1.3);
+      spawnParticles(catX,catY,'#ccaa77',10,1.0);
+      spawnPopup(catX,catY-55,'☄️ ASTEROID HIT!','#cc8833');
+    } else if(s.kind==='gravity_wave'){
+      catVY=Math.max(catVY,0)+14+Math.random()*6;
+      catVX*=0.65;
+      combo=Math.max(0,combo-1);
+      shakePow=10;
+      spawnParticles(catX,catY,'#9944ff',20,1.3);
+      spawnParticles(catX,catY,'#cc88ff',10,0.9);
       spawnPopup(catX,catY-55,'▼ GRAVITY WAVE!','#aa55ff');
     }
+    totalBounces++;
+    groundedFrames=0; skidding=false;
+  }
+
+  // Stratosphere objects (planes, hot air balloons, pterodactyls)
+  for(const s of stratosphereObjects) {
+    if(s.hit) continue;
+    if(Math.hypot(catX-s.x,catY-s.y)>62) continue;
+    s.hit=true;
+    combo++; if(combo>maxCombo)maxCombo=combo; comboTimer=nextComboTimer();
+    if(s.kind==='plane'){
+      catVY=Math.min(catVY,0)-12-Math.random()*6;
+      catVX+=10+Math.random()*4;
+      shakePow=14;
+      spawnParticles(catX,catY,'#ddeeff',24,1.4);
+      spawnParticles(catX,catY,'#ffffff',10,1.0);
+      spawnPopup(catX,catY-55,'✈️ TURBULENCE!','#aaccff');
+    } else if(s.kind==='balloon'){
+      catVY=-(16+Math.random()*8);
+      catVX*=0.9;
+      catSpin=(Math.random()-0.5)*0.25;
+      shakePow=10;
+      spawnParticles(catX,catY,'#ff4466',20,1.3);
+      spawnParticles(catX,catY,'#ffdd00',12,1.0);
+      spawnPopup(catX,catY-55,'🎈 BALLOON LIFT!','#ff8800');
+    } else if(s.kind==='pterodactyl'){
+      catVY=-(14+Math.random()*8);
+      catVX+=5+Math.random()*4;
+      catSpin=(Math.random()-0.5)*0.35;
+      shakePow=12;
+      spawnParticles(catX,catY,'#887766',22,1.2);
+      spawnParticles(catX,catY,'#bbaa99',8,0.9);
+      spawnPopup(catX,catY-55,'🦕 PTERODACTYL RIDE!','#aa8866');
+    }
+    catVX+=Math.min(combo,12)*0.3;
     totalBounces++;
     groundedFrames=0; skidding=false;
   }
@@ -1280,6 +1431,7 @@ function update() {
   if(catTrail.length>18)catTrail.shift();
 
   generateWorld(cam);
+  generateStratosphereObjects();
   generateSpaceObjects();
   for(const u of unicorns){u.anim++;u.x+=u.dir*0.9;if(u.x>cam+W+300)u.dir=-1;if(u.x<cam-300)u.dir=1;}
   checkCollisions();
@@ -1314,6 +1466,7 @@ function draw() {
   for(const cl of clouds){cl.x-=cl.speed;if(cl.x<cam-cl.w-50)cl.x=cam+W+cl.w;drawCloud(cl.x-cam,cl.y,cl.w);}
   for(const u of unicorns){if(u.x<cam-120||u.x>cam+W+120)continue;drawUnicorn(u.x-cam,groundY-5,u.dir,u.anim);}
   drawGround();
+  drawStratosphereObjects();
   drawSpaceObjects();
   drawSpeedLines();
 
