@@ -79,6 +79,12 @@ canvas { display:block; }
   pointer-events:none; z-index:10; font-family:Georgia,serif;
   transition:opacity 0.8s;
 }
+.color-picker { display:flex; flex-direction:column; align-items:center; margin-bottom:22px; }
+.color-picker-label { color:#ffcce8; font-size:11px; letter-spacing:2.5px; text-transform:uppercase; font-family:Georgia,serif; margin-bottom:10px; }
+.color-swatches { display:flex; gap:16px; }
+.swatch { width:52px; height:52px; border-radius:50%; border:3px solid rgba(255,255,255,0.25); cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center; transition:transform 0.15s,border-color 0.15s,box-shadow 0.15s; }
+.swatch.selected { border-color:#fff; transform:scale(1.2); box-shadow:0 0 20px rgba(255,255,255,0.6); }
+.swatch:active { transform:scale(0.95) !important; }
 </style>
 </head>
 <body>
@@ -87,6 +93,15 @@ canvas { display:block; }
   <span class="cat-bounce">🐱</span>
   <h1>Kitty Launch!</h1>
   <div class="splash-sub">Pull • Release • Fly Forever</div>
+  <div class="color-picker">
+    <div class="color-picker-label">Choose Your Cat</div>
+    <div class="color-swatches">
+      <button class="swatch" data-color="orange" style="background:linear-gradient(135deg,#ff9944,#ff6622)">🐱</button>
+      <button class="swatch" data-color="black"  style="background:linear-gradient(135deg,#555,#111)">🐱</button>
+      <button class="swatch" data-color="white"  style="background:linear-gradient(135deg,#fff,#ddd)">🐱</button>
+      <button class="swatch" data-color="purple" style="background:linear-gradient(135deg,#cc66ff,#7722bb)">🐱</button>
+    </div>
+  </div>
   <button id="startBtn">LAUNCH! 🚀</button>
   <div id="splashHi">Best: 0 m</div>
   <div id="splashTips">🟢 Trampoline — bounce higher<br>🚀 Rocket — massive speed blast<br>⭐ Stars — height boost<br>💛 Ring — speed ring<br>🌀 Tornado — wild spin boost</div>
@@ -97,6 +112,15 @@ canvas { display:block; }
   <div id="goStats">0 m</div>
   <div id="goExtra"></div>
   <div id="goHi">Best: 0 m</div>
+  <div class="color-picker">
+    <div class="color-picker-label">Choose Your Cat</div>
+    <div class="color-swatches">
+      <button class="swatch" data-color="orange" style="background:linear-gradient(135deg,#ff9944,#ff6622)">🐱</button>
+      <button class="swatch" data-color="black"  style="background:linear-gradient(135deg,#555,#111)">🐱</button>
+      <button class="swatch" data-color="white"  style="background:linear-gradient(135deg,#fff,#ddd)">🐱</button>
+      <button class="swatch" data-color="purple" style="background:linear-gradient(135deg,#cc66ff,#7722bb)">🐱</button>
+    </div>
+  </div>
   <button onclick="restartGame()">Again! 🐱</button>
 </div>
 
@@ -142,6 +166,13 @@ let combo = 0, maxCombo = 0;
 let totalBounces = 0;
 let shakeX = 0, shakeY = 0, shakePow = 0;
 let comboTimer = 0;
+const CAT_COLORS = {
+  orange: { body:'#ff8c42', head:'#ff9d57', outline:'#b85200', inner:'#ffccaa', stripe:'rgba(160,60,0,0.4)',   tail:'#ff8c42', tailLine:'#c25a00' },
+  black:  { body:'#2d2d2d', head:'#3f3f3f', outline:'#111111', inner:'#5a4040', stripe:'rgba(0,0,0,0.45)',     tail:'#2d2d2d', tailLine:'#111111' },
+  white:  { body:'#f5f0eb', head:'#fffcf8', outline:'#bbbbbb', inner:'#ffd8e0', stripe:'rgba(155,155,155,0.3)',tail:'#eeeeee', tailLine:'#aaaaaa' },
+  purple: { body:'#9944cc', head:'#bb66ee', outline:'#5a1a88', inner:'#ddaaff', stripe:'rgba(50,0,90,0.45)',   tail:'#9944cc', tailLine:'#5a1a88' },
+};
+let catColor = localStorage.getItem('kittyColor') || 'orange';
 let speedLines = [];
 let particles = [];
 let popups = [];
@@ -537,23 +568,24 @@ function drawCat(x, y, angle) {
   ctx.beginPath(); ctx.ellipse(0,sz*2.5,sz*1.2,sz*0.5,0,0,Math.PI*2); ctx.fill();
   ctx.restore();
 
+  const cc=CAT_COLORS[catColor];
   // Body
   ctx.beginPath(); ctx.ellipse(0,3,sz*0.88,sz*0.73,0,0,Math.PI*2);
-  ctx.fillStyle='#ff8c42'; ctx.fill(); ctx.strokeStyle='#b85200'; ctx.lineWidth=2; ctx.stroke();
+  ctx.fillStyle=cc.body; ctx.fill(); ctx.strokeStyle=cc.outline; ctx.lineWidth=2; ctx.stroke();
   // Stripes
-  ctx.strokeStyle='rgba(160,60,0,0.4)'; ctx.lineWidth=1.5;
+  ctx.strokeStyle=cc.stripe; ctx.lineWidth=1.5;
   for(let i=-1;i<=1;i++) { ctx.beginPath(); ctx.moveTo(i*10,-sz*0.3); ctx.lineTo(i*8,sz*0.4); ctx.stroke(); }
 
   // Head
   ctx.beginPath(); ctx.arc(0,-sz*0.52,sz*0.62,0,Math.PI*2);
-  ctx.fillStyle='#ff9d57'; ctx.fill(); ctx.strokeStyle='#b85200'; ctx.lineWidth=2; ctx.stroke();
+  ctx.fillStyle=cc.head; ctx.fill(); ctx.strokeStyle=cc.outline; ctx.lineWidth=2; ctx.stroke();
 
   // Ears
   const earPairs=[[-sz*0.44,-sz*0.9,-sz*0.68,-sz*1.42,-sz*0.1,-sz*1.06],[sz*0.44,-sz*0.9,sz*0.68,-sz*1.42,sz*0.1,-sz*1.06]];
   for(const [ax,ay,bx,by,cx2,cy] of earPairs) {
-    ctx.fillStyle='#ff8c42'; ctx.strokeStyle='#b85200'; ctx.lineWidth=2;
+    ctx.fillStyle=cc.body; ctx.strokeStyle=cc.outline; ctx.lineWidth=2;
     ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.lineTo(cx2,cy); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.fillStyle='#ffccaa';
+    ctx.fillStyle=cc.inner;
     ctx.beginPath(); ctx.moveTo(ax*0.85,ay*0.95); ctx.lineTo(bx*0.82,by*0.9); ctx.lineTo(cx2*0.7,cy*0.92); ctx.closePath(); ctx.fill();
   }
 
@@ -586,10 +618,10 @@ function drawCat(x, y, angle) {
   }
 
   // Tail — wags based on spin
-  ctx.strokeStyle='#ff8c42'; ctx.lineWidth=7; ctx.lineCap='round';
+  ctx.strokeStyle=cc.tail; ctx.lineWidth=7; ctx.lineCap='round';
   const tw=Math.sin(frameCount*0.18)*0.5;
   ctx.beginPath(); ctx.moveTo(sz*0.7,sz*0.4); ctx.quadraticCurveTo(sz*1.65,sz*0.1+tw*sz,sz*1.4,-sz*0.45+tw*sz*0.5); ctx.stroke();
-  ctx.strokeStyle='#c25a00'; ctx.lineWidth=3;
+  ctx.strokeStyle=cc.tailLine; ctx.lineWidth=3;
   ctx.beginPath(); ctx.moveTo(sz*0.7,sz*0.4); ctx.quadraticCurveTo(sz*1.65,sz*0.1+tw*sz,sz*1.4,-sz*0.45+tw*sz*0.5); ctx.stroke();
 
   ctx.shadowBlur = 0;
@@ -766,9 +798,9 @@ function update() {
   // Air drag
   catVX*=0.9985;
 
-  // Camera
-  const targetCam=catX-W*0.38;
-  if(targetCam>cam) cam+=(targetCam-cam)*0.09;
+  // Camera — always follow cat
+  const targetCam=catX-W*0.42;
+  cam+=(targetCam-cam)*0.12;
 
   distance=Math.max(0,Math.floor((catX-SLING_X)/5));
 
@@ -829,10 +861,10 @@ function draw() {
     const sx=SLING_X-cam,sy=slingY();
     const dx=sx-(dragX);
     const dy=sy-dragY;
-    const pow=0.22;
+    const pow=0.30;
     let px=catX,py=catY,pvx=-dx*pow,pvy=-dy*pow;
     ctx.fillStyle='rgba(255,220,0,0.6)';
-    for(let i=0;i<22;i++){
+    for(let i=0;i<30;i++){
       pvx*=0.9985; pvy+=GRAVITY*0.85; px+=pvx; py+=pvy;
       if(py>groundY)break;
       const a=1-i/22;
@@ -892,7 +924,7 @@ function onMove(e){
   const {x,y}=getPos(e);
   const sx=SLING_X-cam,sy=slingY();
   const dx=x-sx,dy=y-sy;
-  const maxPull=105;
+  const maxPull=130;
   const dist=Math.hypot(dx,dy);
   const clamped=Math.min(dist,maxPull);
   const ang=Math.atan2(dy,dx);
@@ -905,8 +937,8 @@ function onUp(e){
   if(!dragging)return; dragging=false;
   const sx=SLING_X-cam,sy=slingY();
   const dx=dragX-sx, dy=dragY-sy;
-  catVX=-dx*0.22; catVY=-dy*0.22;
-  if(Math.hypot(catVX,catVY)<2)return; // too weak, reset
+  catVX=-dx*0.30; catVY=-dy*0.30;
+  if(Math.hypot(catVX,catVY)<2.5)return; // too weak, reset
   launched=true;
   document.getElementById('instruct').style.opacity='0';
 }
@@ -917,6 +949,14 @@ canvas.addEventListener('mouseup',onUp);
 canvas.addEventListener('touchstart',onDown,{passive:false});
 canvas.addEventListener('touchmove',onMove,{passive:false});
 canvas.addEventListener('touchend',onUp);
+
+function selectColor(c) {
+  catColor = c;
+  localStorage.setItem('kittyColor', catColor);
+  document.querySelectorAll('.swatch').forEach(b => b.classList.toggle('selected', b.dataset.color === c));
+}
+document.querySelectorAll('.swatch').forEach(b => b.addEventListener('click', () => selectColor(b.dataset.color)));
+selectColor(catColor);
 
 // ── GAME OVER ──
 function showGameOver(){
