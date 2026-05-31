@@ -85,6 +85,8 @@ canvas { display:block; }
 .swatch { width:52px; height:52px; border-radius:50%; border:3px solid rgba(255,255,255,0.25); cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center; transition:transform 0.15s,border-color 0.15s,box-shadow 0.15s; }
 .swatch.selected { border-color:#fff; transform:scale(1.2); box-shadow:0 0 20px rgba(255,255,255,0.6); }
 .swatch:active { transform:scale(0.95) !important; }
+.swatch.locked { opacity:0.4; cursor:not-allowed; filter:grayscale(0.7); }
+.swatch.locked:active { transform:none !important; }
 </style>
 </head>
 <body>
@@ -100,6 +102,7 @@ canvas { display:block; }
       <button class="swatch" data-color="black"  style="background:linear-gradient(135deg,#555,#111)">🐱</button>
       <button class="swatch" data-color="white"  style="background:linear-gradient(135deg,#fff,#ddd)">🐱</button>
       <button class="swatch" data-color="purple" style="background:linear-gradient(135deg,#cc66ff,#7722bb)">🐱</button>
+      <button class="swatch fatcat-swatch" data-color="fatcat" style="background:linear-gradient(135deg,#ffcc44,#d47000)">🔒</button>
     </div>
   </div>
   <button id="startBtn">LAUNCH! 🚀</button>
@@ -119,6 +122,7 @@ canvas { display:block; }
       <button class="swatch" data-color="black"  style="background:linear-gradient(135deg,#555,#111)">🐱</button>
       <button class="swatch" data-color="white"  style="background:linear-gradient(135deg,#fff,#ddd)">🐱</button>
       <button class="swatch" data-color="purple" style="background:linear-gradient(135deg,#cc66ff,#7722bb)">🐱</button>
+      <button class="swatch fatcat-swatch" data-color="fatcat" style="background:linear-gradient(135deg,#ffcc44,#d47000)">🔒</button>
     </div>
   </div>
   <button onclick="restartGame()">Again! 🐱</button>
@@ -156,7 +160,7 @@ const MIN_BOUNCE_VY = 2.2;    // below this speed, cat stops
 const SLING_X = 175;
 
 // ── state ──
-let cam, catX, catY, catVX, catVY, catAngle, catSpin;
+let cam, camY, catX, catY, catVX, catVY, catAngle, catSpin;
 let launched, dragging, dragX, dragY;
 let gameRunning = false;
 let frameCount = 0;
@@ -173,6 +177,7 @@ const CAT_COLORS = {
   purple: { body:'#9944cc', head:'#bb66ee', outline:'#5a1a88', inner:'#ddaaff', stripe:'rgba(50,0,90,0.45)',   tail:'#9944cc', tailLine:'#5a1a88' },
 };
 let catColor = localStorage.getItem('kittyColor') || 'orange';
+let fatCatUnlocked = localStorage.getItem('kittyFatCat') === '1';
 let speedLines = [];
 let particles = [];
 let popups = [];
@@ -228,7 +233,7 @@ function generateWorld(toX) {
 
 function initGame() {
   groundY = H * 0.78;
-  cam = 0;
+  cam = 0; camY = 0;
   catX = SLING_X; catY = slingY() - 10;
   catVX = 0; catVY = 0; catAngle = 0; catSpin = 0;
   launched = false; dragging = false;
@@ -628,6 +633,84 @@ function drawCat(x, y, angle) {
   ctx.restore();
 }
 
+function drawFatCat(x, y, angle) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.scale(catSquish, catStretch);
+  const sz=44;
+  if(combo>=3){
+    const glowCols=['#ff8800','#ff4400','#ff0066','#aa00ff','#00ccff'];
+    ctx.shadowColor=glowCols[Math.min(Math.floor((combo-1)/4),4)];
+    ctx.shadowBlur=15+Math.min(combo*2,35);
+  }
+  // Huge belly shadow
+  ctx.save(); ctx.scale(1,0.28);
+  ctx.fillStyle='rgba(0,0,0,0.2)';
+  ctx.beginPath(); ctx.ellipse(0,sz*2.9,sz*1.5,sz*0.55,0,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+  // Massive round body
+  ctx.beginPath(); ctx.ellipse(0,10,sz*1.15,sz,0,0,Math.PI*2);
+  ctx.fillStyle='#e8a020'; ctx.fill(); ctx.strokeStyle='#7a3e00'; ctx.lineWidth=3; ctx.stroke();
+  // Belly highlight
+  ctx.beginPath(); ctx.ellipse(4,16,sz*0.62,sz*0.58,0,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,225,140,0.38)'; ctx.fill();
+  // Body stripes
+  ctx.strokeStyle='rgba(120,45,0,0.4)'; ctx.lineWidth=3;
+  for(let i=-1;i<=1;i++){ctx.beginPath();ctx.moveTo(i*17,-sz*0.25);ctx.lineTo(i*13,sz*0.55);ctx.stroke();}
+  // Big round head
+  ctx.beginPath(); ctx.arc(0,-sz*0.42,sz*0.78,0,Math.PI*2);
+  ctx.fillStyle='#f0aa28'; ctx.fill(); ctx.strokeStyle='#7a3e00'; ctx.lineWidth=3; ctx.stroke();
+  // Double chin jowls
+  ctx.beginPath(); ctx.ellipse(-sz*0.22,-sz*0.04,sz*0.28,sz*0.22,0,0,Math.PI*2);
+  ctx.fillStyle='#f0aa28'; ctx.fill();
+  ctx.beginPath(); ctx.ellipse(sz*0.22,-sz*0.04,sz*0.28,sz*0.22,0,0,Math.PI*2);
+  ctx.fillStyle='#f0aa28'; ctx.fill();
+  // Fat ears (short and stubby)
+  [[-1],[1]].forEach(([s])=>{
+    ctx.fillStyle='#e8a020'; ctx.strokeStyle='#7a3e00'; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.moveTo(s*sz*0.5,-sz*0.82); ctx.lineTo(s*sz*0.72,-sz*1.25); ctx.lineTo(s*sz*0.18,-sz*1.02); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#ffccaa';
+    ctx.beginPath(); ctx.moveTo(s*sz*0.42,-sz*0.86); ctx.lineTo(s*sz*0.62,-sz*1.18); ctx.lineTo(s*sz*0.22,-sz*1.0); ctx.closePath(); ctx.fill();
+  });
+  // Eyes — wide when going fast
+  const spd=Math.hypot(catVX,catVY);
+  const eyeH=sz*0.15+Math.min(spd*0.004,0.08);
+  ctx.fillStyle='#1a1a1a';
+  ctx.beginPath(); ctx.ellipse(-sz*0.25,-sz*0.46,sz*0.13,eyeH,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(sz*0.25,-sz*0.46,sz*0.13,eyeH,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.beginPath(); ctx.arc(-sz*0.2,-sz*0.5,sz*0.045,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(sz*0.3,-sz*0.5,sz*0.045,0,Math.PI*2); ctx.fill();
+  // Big nose
+  ctx.fillStyle='#ff4477';
+  ctx.beginPath(); ctx.moveTo(-sz*0.09,-sz*0.3); ctx.lineTo(sz*0.09,-sz*0.3); ctx.lineTo(0,-sz*0.22); ctx.closePath(); ctx.fill();
+  // Mouth
+  ctx.strokeStyle='#883322'; ctx.lineWidth=2;
+  const moodY=catVY>2?-sz*0.1:-sz*0.15;
+  ctx.beginPath(); ctx.moveTo(0,-sz*0.22); ctx.quadraticCurveTo(-sz*0.22,-sz*0.18,-sz*0.25,moodY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0,-sz*0.22); ctx.quadraticCurveTo(sz*0.22,-sz*0.18,sz*0.25,moodY); ctx.stroke();
+  // Whiskers
+  ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=1.4;
+  for(const s of[-1,1]){
+    ctx.beginPath(); ctx.moveTo(s*sz*0.1,-sz*0.3); ctx.lineTo(s*sz*0.75,-sz*0.42); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s*sz*0.1,-sz*0.3); ctx.lineTo(s*sz*0.75,-sz*0.28); ctx.stroke();
+  }
+  // Tiny stub legs
+  ctx.fillStyle='#e8a020'; ctx.strokeStyle='#7a3e00'; ctx.lineWidth=2;
+  [-sz*0.5,sz*0.5].forEach(lx=>{
+    ctx.beginPath(); ctx.ellipse(lx,sz*0.78,sz*0.18,sz*0.13,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  });
+  // Fat tail
+  ctx.strokeStyle='#e8a020'; ctx.lineWidth=14; ctx.lineCap='round';
+  const tw=Math.sin(frameCount*0.18)*0.5;
+  ctx.beginPath(); ctx.moveTo(sz*0.9,sz*0.35); ctx.quadraticCurveTo(sz*2.1,sz*0.1+tw*sz,sz*1.75,-sz*0.3+tw*sz*0.4); ctx.stroke();
+  ctx.strokeStyle='#7a3e00'; ctx.lineWidth=5;
+  ctx.beginPath(); ctx.moveTo(sz*0.9,sz*0.35); ctx.quadraticCurveTo(sz*2.1,sz*0.1+tw*sz,sz*1.75,-sz*0.3+tw*sz*0.4); ctx.stroke();
+  ctx.shadowBlur=0;
+  ctx.restore();
+}
+
 function drawSlingshot() {
   const sx = SLING_X - cam, sy = slingY();
   ctx.strokeStyle='#7a4a1a'; ctx.lineWidth=13; ctx.lineCap='round';
@@ -798,9 +881,11 @@ function update() {
   // Air drag
   catVX*=0.9985;
 
-  // Camera — always follow cat
+  // Camera — always follow cat (horizontal + vertical)
   const targetCam=catX-W*0.42;
   cam+=(targetCam-cam)*0.12;
+  const targetCamY=catY-H*0.5;
+  camY+=(targetCamY-camY)*0.1;
 
   distance=Math.max(0,Math.floor((catX-SLING_X)/5));
 
@@ -816,7 +901,16 @@ function update() {
 
   const dm=Math.round(distance);
   document.getElementById('distDisplay').textContent=dm+' m';
-  if(dm>highScore){highScore=dm;document.getElementById('hiDisplay').textContent=highScore+' m';}
+  if(dm>highScore){
+    highScore=dm;
+    document.getElementById('hiDisplay').textContent=highScore+' m';
+    if(highScore>=500000&&!fatCatUnlocked){
+      fatCatUnlocked=true;
+      localStorage.setItem('kittyFatCat','1');
+      updateFatCatSwatches();
+      spawnPopup(catX,catY-70,'🔓 FAT CAT UNLOCKED!','#ffdd00');
+    }
+  }
 }
 
 function draw() {
@@ -824,6 +918,10 @@ function draw() {
   ctx.translate(shakeX, shakeY);
   drawBg();
   drawStars();
+
+  // World space — scrolls both horizontally (via cam) and vertically (via camY)
+  ctx.save();
+  ctx.translate(0, -camY);
   drawMountains();
   for(const rb of rainbows){if(rb.x<cam-rb.r-20||rb.x>cam+W+rb.r)continue;drawRainbow(rb.x-cam,groundY-60,rb.r);}
   for(const cl of clouds){cl.x-=cl.speed;if(cl.x<cam-cl.w-50)cl.x=cam+W+cl.w;drawCloud(cl.x-cam,cl.y,cl.w);}
@@ -854,7 +952,8 @@ function draw() {
   if(!launched||dragging) drawBand();
 
   const catDrawX=catX-cam, catDrawY=catY;
-  drawCat(catDrawX, catDrawY, catAngle);
+  if(catColor==='fatcat') drawFatCat(catDrawX, catDrawY, catAngle);
+  else drawCat(catDrawX, catDrawY, catAngle);
 
   // Aiming guide dots
   if(dragging){
@@ -885,6 +984,7 @@ function draw() {
   }
 
   drawParticles();
+  ctx.restore(); // end world space (camY)
   ctx.restore();
 }
 
@@ -950,12 +1050,20 @@ canvas.addEventListener('touchstart',onDown,{passive:false});
 canvas.addEventListener('touchmove',onMove,{passive:false});
 canvas.addEventListener('touchend',onUp);
 
+function updateFatCatSwatches() {
+  document.querySelectorAll('.fatcat-swatch').forEach(b => {
+    b.textContent = fatCatUnlocked ? '🐱' : '🔒';
+    b.classList.toggle('locked', !fatCatUnlocked);
+  });
+}
 function selectColor(c) {
+  if(c==='fatcat'&&!fatCatUnlocked) return;
   catColor = c;
   localStorage.setItem('kittyColor', catColor);
   document.querySelectorAll('.swatch').forEach(b => b.classList.toggle('selected', b.dataset.color === c));
 }
 document.querySelectorAll('.swatch').forEach(b => b.addEventListener('click', () => selectColor(b.dataset.color)));
+updateFatCatSwatches();
 selectColor(catColor);
 
 // ── GAME OVER ──
