@@ -215,101 +215,161 @@ function colorToPalette(hex) {
 // ── Sprite cache ──
 const sprites = {};
 function initSprites() {
+
+  // ── CUMULUS ──────────────────────────────────────────────────────────────
+  // Key principles: all gradient edges fade to alpha=0 (no hard circle borders),
+  // organic puff arrangement, strong flat base shadow, warm tops / cool bottoms.
   function makeCumulusSprite(refW) {
-    const refH = Math.round(refW * 0.56);
+    const refH = Math.round(refW * 0.68);
     const oc = document.createElement('canvas');
     oc.width = refW*2; oc.height = refH*2;
     const c = oc.getContext('2d');
     c.scale(2,2);
-    const cx=refW/2, cy=refH*0.62;
-    const bs=[
-      [cx,cy,refW*0.36],[cx-refW*0.26,cy+refH*0.07,refW*0.28],
-      [cx+refW*0.25,cy+refH*0.07,refW*0.28],[cx+refW*0.1,cy-refH*0.24,refW*0.25],
-      [cx-refW*0.08,cy-refH*0.18,refW*0.22],[cx+refW*0.22,cy-refH*0.06,refW*0.20],
-      [cx-refW*0.21,cy-refH*0.05,refW*0.18],[cx+refW*0.02,cy-refH*0.37,refW*0.16],
+
+    const cx = refW*0.50;
+    const base = refH*0.76; // y of flat cloud base
+
+    // Organic, asymmetric puff layout  [x, y, radius]
+    const puffs = [
+      // Base row — large, define the flat bottom
+      [cx-refW*0.22, base-refW*0.10, refW*0.32],
+      [cx+refW*0.04, base-refW*0.13, refW*0.36],
+      [cx+refW*0.26, base-refW*0.09, refW*0.27],
+      // Middle tier — building up
+      [cx-refW*0.33, base-refW*0.28, refW*0.24],
+      [cx-refW*0.10, base-refW*0.35, refW*0.30],
+      [cx+refW*0.14, base-refW*0.37, refW*0.28],
+      [cx+refW*0.34, base-refW*0.27, refW*0.22],
+      // Upper tier
+      [cx-refW*0.20, base-refW*0.54, refW*0.22],
+      [cx+refW*0.05, base-refW*0.60, refW*0.25],
+      [cx+refW*0.26, base-refW*0.51, refW*0.19],
+      // Peak
+      [cx-refW*0.03, base-refW*0.76, refW*0.18],
+      [cx+refW*0.18, base-refW*0.70, refW*0.15],
     ];
-    // Ambient pre-shadow
-    bs.forEach(([bx,by,br])=>{
-      const sg=c.createRadialGradient(bx,by+br*0.35,br*0.1,bx,by+br*0.2,br*0.95);
-      sg.addColorStop(0,'rgba(120,145,200,0.10)'); sg.addColorStop(1,'rgba(120,145,200,0)');
-      c.fillStyle=sg; c.beginPath(); c.arc(bx,by,br,0,Math.PI*2); c.fill();
+
+    // Pass 1: Ambient under-shadow (very subtle, preconditions the canvas)
+    puffs.forEach(([px,py,pr]) => {
+      const g = c.createRadialGradient(px,py+pr*0.5,0, px,py+pr*0.25,pr*1.1);
+      g.addColorStop(0,'rgba(80,95,155,0.22)');
+      g.addColorStop(0.6,'rgba(90,105,165,0.08)');
+      g.addColorStop(1,'rgba(100,115,175,0)');
+      c.fillStyle=g; c.beginPath(); c.arc(px,py,pr*1.1,0,Math.PI*2); c.fill();
     });
-    // Main fill — top-lit, blue-grey shading toward base
-    bs.forEach(([bx,by,br])=>{
-      const g=c.createRadialGradient(bx-br*0.28,by-br*0.42,0,bx+br*0.1,by+br*0.18,br*1.08);
-      g.addColorStop(0,'#ffffff'); g.addColorStop(0.3,'#f8faff');
-      g.addColorStop(0.62,'#deeaf8'); g.addColorStop(1,'#b8cde0');
-      c.fillStyle=g; c.beginPath(); c.arc(bx,by,br,0,Math.PI*2); c.fill();
+
+    // Pass 2: Main cloud body — CRITICAL: final stop is alpha=0, so NO hard circle edge
+    puffs.forEach(([px,py,pr]) => {
+      const g = c.createRadialGradient(px-pr*0.24,py-pr*0.30, pr*0.03, px+pr*0.06,py+pr*0.10, pr*1.04);
+      g.addColorStop(0,   'rgba(255,255,250,0.97)'); // warm-white core
+      g.addColorStop(0.25,'rgba(252,253,255,0.90)');
+      g.addColorStop(0.52,'rgba(238,245,255,0.60)'); // slight cool mid
+      g.addColorStop(0.78,'rgba(220,234,254,0.20)'); // blue-grey fade
+      g.addColorStop(1,   'rgba(210,228,252,0)');    // fully transparent edge
+      c.fillStyle=g; c.beginPath(); c.arc(px,py,pr*1.04,0,Math.PI*2); c.fill();
     });
-    // Strong bottom shadow — flat base effect (most important realism cue)
-    bs.forEach(([bx,by,br])=>{
-      const sg=c.createRadialGradient(bx,by+br*0.62,br*0.05,bx,by+br*0.38,br);
-      sg.addColorStop(0,'rgba(82,105,162,0.64)');
-      sg.addColorStop(0.42,'rgba(92,115,172,0.30)');
-      sg.addColorStop(1,'rgba(102,125,182,0)');
-      c.fillStyle=sg; c.beginPath(); c.arc(bx,by,br,0,Math.PI*2); c.fill();
+
+    // Pass 3: Fold / inter-puff shadows — placed where puffs overlap (depth cue)
+    // Lower puffs receive stronger shadow (in shadow of upper mass)
+    puffs.forEach(([px,py,pr],i) => {
+      const str = i<3 ? 0.52 : i<7 ? 0.28 : 0.12;
+      const g = c.createRadialGradient(px+pr*0.10,py+pr*0.58,pr*0.04, px,py+pr*0.22,pr*0.96);
+      g.addColorStop(0,`rgba(72,88,152,${str})`);
+      g.addColorStop(0.45,`rgba(82,98,162,${str*0.42})`);
+      g.addColorStop(1,'rgba(92,108,172,0)');
+      c.fillStyle=g; c.beginPath(); c.arc(px,py,pr*0.96,0,Math.PI*2); c.fill();
     });
-    // Bright top specular highlights
-    bs.forEach(([bx,by,br])=>{
-      const sp=c.createRadialGradient(bx-br*0.30,by-br*0.38,0,bx-br*0.10,by-br*0.18,br*0.65);
-      sp.addColorStop(0,'rgba(255,255,255,0.94)'); sp.addColorStop(0.38,'rgba(255,255,255,0.38)'); sp.addColorStop(1,'rgba(255,255,255,0)');
-      c.fillStyle=sp; c.beginPath(); c.arc(bx,by,br,0,Math.PI*2); c.fill();
+
+    // Pass 4: Bright top-lit specular — warm cream shine on upper surface
+    puffs.forEach(([px,py,pr]) => {
+      const g = c.createRadialGradient(px-pr*0.28,py-pr*0.34,0, px-pr*0.08,py-pr*0.16,pr*0.68);
+      g.addColorStop(0,  'rgba(255,255,245,0.92)'); // warm cream
+      g.addColorStop(0.35,'rgba(255,255,250,0.38)');
+      g.addColorStop(0.72,'rgba(255,255,255,0.08)');
+      g.addColorStop(1,  'rgba(255,255,255,0)');
+      c.fillStyle=g; c.beginPath(); c.arc(px,py,pr*0.88,0,Math.PI*2); c.fill();
     });
-    return {canvas:oc,dw:refW,dh:refH};
+
+    return {canvas:oc, dw:refW, dh:refH};
   }
 
+  // ── CIRRUS ───────────────────────────────────────────────────────────────
+  // Ice-crystal wisps. Multiple feathered strands including hooked ends.
   function makeCirrusSprite(refW) {
-    const refH = Math.round(refW * 0.20);
+    const refH = Math.round(refW*0.26);
     const oc = document.createElement('canvas');
-    oc.width = refW*2; oc.height = Math.max(refH*2+16,32);
+    oc.width = refW*2; oc.height = Math.max(refH*2+20,40);
     const c = oc.getContext('2d');
     c.scale(2,2);
-    // Four wispy strands with feathered edges
-    const strands=[
-      [refW*0.04,refH*0.55,refW*0.46,refH*0.10,refW*0.93,refH*0.48],
-      [refW*0.08,refH*0.88,refW*0.50,refH*0.42,refW*0.90,refH*0.75],
-      [refW*0.02,refH*0.28,refW*0.42,refH*0.70,refW*0.80,refH*0.18],
-      [refW*0.16,refH*1.08,refW*0.56,refH*0.55,refW*0.96,refH*0.95],
-    ];
-    strands.forEach(([x1,y1,cpx,cpy,x2,y2])=>{
-      [9,6,3,1.5].forEach((lw,j)=>{
-        const a=[0.06,0.13,0.21,0.17][j];
-        const g=c.createLinearGradient(x1,0,x2,0);
-        g.addColorStop(0,'rgba(255,255,255,0)');
-        g.addColorStop(0.2,`rgba(255,255,255,${a})`);
-        g.addColorStop(0.8,`rgba(255,255,255,${a})`);
-        g.addColorStop(1,'rgba(255,255,255,0)');
+
+    function wisp(x1,y1,cpx,cpy,x2,y2,maxW,baseA) {
+      [maxW, maxW*0.55, maxW*0.30, maxW*0.14].forEach((lw,j) => {
+        const a = baseA * [0.55,0.75,1.0,0.80][j];
+        const g = c.createLinearGradient(x1,0,x2,0);
+        g.addColorStop(0,'rgba(240,246,255,0)');
+        g.addColorStop(0.12,`rgba(248,252,255,${a*0.5})`);
+        g.addColorStop(0.40,`rgba(255,255,255,${a})`);
+        g.addColorStop(0.65,`rgba(248,252,255,${a})`);
+        g.addColorStop(0.90,`rgba(245,250,255,${a*0.5})`);
+        g.addColorStop(1,'rgba(240,246,255,0)');
         c.strokeStyle=g; c.lineWidth=lw; c.lineCap='round';
         c.beginPath(); c.moveTo(x1,y1); c.quadraticCurveTo(cpx,cpy,x2,y2); c.stroke();
       });
-    });
-    return {canvas:oc,dw:refW,dh:refH};
+    }
+
+    const H = refH;
+    // Main sweeping strand
+    wisp(refW*0.03,H*0.55, refW*0.44,H*0.08, refW*0.95,H*0.50, 11, 0.28);
+    // Secondary parallel strand (slightly offset)
+    wisp(refW*0.06,H*0.90, refW*0.48,H*0.45, refW*0.92,H*0.80, 7, 0.20);
+    // Thin upper wisp
+    wisp(refW*0.08,H*0.20, refW*0.40,H*0.72, refW*0.78,H*0.15, 5, 0.16);
+    // Hooked tendril at right end (cirrus uncinus)
+    wisp(refW*0.72,H*0.50, refW*0.90,H*0.08, refW*0.98,H*0.38, 5, 0.18);
+    // Hooked tendril at left end
+    wisp(refW*0.02,H*0.60, refW*0.12,H*1.0,  refW*0.20,H*0.55, 4, 0.14);
+    // Fine hair-like accent
+    wisp(refW*0.18,H*1.15, refW*0.55,H*0.60, refW*0.94,H*1.02, 5, 0.13);
+
+    return {canvas:oc, dw:refW, dh:refH};
   }
 
+  // ── STRATUS ──────────────────────────────────────────────────────────────
+  // Flat horizontal sheets. Gentle gradients, all transparent at edges.
   function makeStratusSprite(refW) {
-    const refH = Math.round(refW * 0.30);
+    const refH = Math.round(refW*0.30);
     const oc = document.createElement('canvas');
     oc.width = refW*2; oc.height = refH*2;
     const c = oc.getContext('2d');
     c.scale(2,2);
-    const cx=refW/2, cy=refH*0.58;
-    const layers=[
-      [cx,cy,refW*0.50,refH*0.38],[cx-refW*0.19,cy+refH*0.06,refW*0.40,refH*0.30],
-      [cx+refW*0.17,cy+refH*0.06,refW*0.38,refH*0.28],[cx-refW*0.03,cy-refH*0.20,refW*0.44,refH*0.22],
-    ];
-    layers.forEach(([lx,ly,lw,lh])=>{
-      const g=c.createRadialGradient(lx-lw*0.18,ly-lh*0.28,0,lx,ly,Math.max(lw,lh)*0.92);
-      g.addColorStop(0,'rgba(246,249,255,0.88)');
-      g.addColorStop(0.45,'rgba(228,236,252,0.60)');
-      g.addColorStop(0.82,'rgba(212,225,248,0.26)');
-      g.addColorStop(1,'rgba(198,218,242,0)');
+
+    const cx=refW*0.50, cy=refH*0.58;
+
+    // Wide ellipse bands — all transparent at edges
+    [
+      [cx,      cy,       refW*0.52,refH*0.40, 0.80],
+      [cx-refW*0.18,cy+refH*0.08,refW*0.42,refH*0.30, 0.60],
+      [cx+refW*0.16,cy+refH*0.07,refW*0.40,refH*0.28, 0.55],
+      [cx-refW*0.04,cy-refH*0.22,refW*0.46,refH*0.24, 0.52],
+      [cx+refW*0.22,cy-refH*0.10,refW*0.28,refH*0.20, 0.38],
+      [cx-refW*0.22,cy-refH*0.08,refW*0.30,refH*0.18, 0.35],
+    ].forEach(([lx,ly,lw,lh,peak]) => {
+      const g = c.createRadialGradient(lx-lw*0.15,ly-lh*0.25,0, lx,ly,Math.max(lw,lh)*0.95);
+      g.addColorStop(0,   `rgba(248,251,255,${peak})`);
+      g.addColorStop(0.40,`rgba(234,242,255,${peak*0.62})`);
+      g.addColorStop(0.72,`rgba(218,232,254,${peak*0.24})`);
+      g.addColorStop(1,   'rgba(205,224,252,0)');
       c.fillStyle=g; c.beginPath(); c.ellipse(lx,ly,lw,lh,0,0,Math.PI*2); c.fill();
     });
-    // Bottom shadow for flat-base feel
-    const sg=c.createLinearGradient(0,cy+refH*0.08,0,cy+refH*0.42);
-    sg.addColorStop(0,'rgba(110,132,180,0)'); sg.addColorStop(1,'rgba(88,112,168,0.28)');
-    c.fillStyle=sg; c.fillRect(0,cy+refH*0.08,refW,refH*0.36);
-    return {canvas:oc,dw:refW,dh:refH};
+
+    // Bottom shadow — contained in ellipse (no fillRect overflow)
+    const sg = c.createRadialGradient(cx,cy+refH*0.30,0, cx,cy+refH*0.10,refW*0.50);
+    sg.addColorStop(0,'rgba(82,102,160,0.30)');
+    sg.addColorStop(0.55,'rgba(92,112,170,0.12)');
+    sg.addColorStop(1,'rgba(102,122,180,0)');
+    c.fillStyle=sg; c.beginPath(); c.ellipse(cx,cy+refH*0.15,refW*0.48,refH*0.28,0,0,Math.PI*2); c.fill();
+
+    return {canvas:oc, dw:refW, dh:refH};
   }
 
   sprites.clouds = {
