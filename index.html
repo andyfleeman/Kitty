@@ -92,16 +92,22 @@ canvas { display:block; }
 .fat-toggle-btn:hover,.fat-toggle-btn.fat-active { background:rgba(255,200,50,0.35); border-color:#ffdd44; box-shadow:0 0 14px rgba(255,220,50,0.45); color:#fff; }
 #comboBar { width:120px; height:4px; background:rgba(255,255,255,0.2); border-radius:2px; margin:5px auto 0; overflow:hidden; opacity:0; transition:opacity 0.2s; }
 #comboBarFill { height:100%; background:#ffdd00; border-radius:2px; transition:width 0.05s linear; }
-#muteBtn {
+#soundCtrl {
+  display:flex; align-items:center; gap:6px;
   background:rgba(0,0,0,0.5);
   border:2px solid rgba(255,220,80,0.55);
-  border-radius:14px; padding:7px 13px;
-  color:#fff; backdrop-filter:blur(8px);
-  font-size:19px; cursor:pointer; pointer-events:auto;
-  font-family:Georgia,serif; line-height:1; align-self:flex-start;
-  transition:background 0.15s;
+  border-radius:14px; padding:6px 12px;
+  backdrop-filter:blur(8px); pointer-events:auto; align-self:flex-start;
 }
-#muteBtn:active { background:rgba(40,20,0,0.65); }
+#muteBtn {
+  background:none; border:none; color:#fff;
+  font-size:18px; cursor:pointer; padding:0; line-height:1;
+}
+#muteBtn:active { transform:scale(0.9); }
+#volSlider {
+  width:58px; height:4px; cursor:pointer; accent-color:#ffd84a;
+  vertical-align:middle;
+}
 #warpBanner {
   position:fixed; top:28%; left:0; right:0; text-align:center;
   pointer-events:none; z-index:50;
@@ -175,7 +181,10 @@ canvas { display:block; }
     <div class="hud-label">Distance</div>
     <div class="hud-val" id="distDisplay">0 m</div>
   </div>
-  <button id="muteBtn" onclick="toggleSound()">🔊</button>
+  <div id="soundCtrl">
+    <button id="muteBtn" onclick="toggleSound()">🔊</button>
+    <input type="range" id="volSlider" min="0" max="100" value="70" oninput="setVolume(this.value)" title="Volume">
+  </div>
   <div class="hud-box">
     <div class="hud-label">Best</div>
     <div class="hud-val" id="hiDisplay">0 m</div>
@@ -472,12 +481,14 @@ function slingY() { return groundY - 95; }
 const SFX = (() => {
   let ctx = null, master = null;
   let muted = localStorage.getItem('kittyMuted') === '1';
+  let volume = (parseInt(localStorage.getItem('kittyVol') || '70') / 100) * 0.72;
   let loopTimer = null;
 
   const BPM = 108, BEAT = 60 / BPM;
 
-  // Pentatonic C-major melody  [hz, beats]
+  // 32-beat pentatonic C-major melody — 4 contrasting 8-beat sections
   const TUNE = [
+    // Section A: bright ascending runs
     [523.3,0.25],[659.3,0.25],[784.0,0.25],[659.3,0.25],
     [880.0,0.5 ],[659.3,0.25],[523.3,0.25],
     [587.3,0.25],[784.0,0.25],[659.3,0.25],[440.0,0.25],
@@ -488,6 +499,7 @@ const SFX = (() => {
     [784.0,0.25],[659.3,0.25],[523.3,0.25],[440.0,0.25],
     [440.0,0.5 ],[392.0,0.5 ],
 
+    // Section B: lower register, bluesy feel
     [261.6,0.25],[392.0,0.25],[523.3,0.25],[659.3,0.25],
     [784.0,0.5 ],[880.0,0.25],[784.0,0.25],
     [659.3,0.25],[523.3,0.25],[440.0,0.25],[392.0,0.25],
@@ -497,19 +509,43 @@ const SFX = (() => {
     [880.0,0.5 ],[784.0,0.25],[659.3,0.25],
     [587.3,0.25],[440.0,0.25],[392.0,0.25],[261.6,0.25],
     [261.6,0.5 ],[523.3,0.5 ],
+
+    // Section C: descending waves, more lyrical
+    [784.0,0.25],[659.3,0.25],[523.3,0.25],[440.0,0.25],
+    [523.3,0.5 ],[659.3,0.25],[784.0,0.25],
+    [880.0,0.25],[784.0,0.25],[659.3,0.25],[523.3,0.25],
+    [392.0,0.5 ],[523.3,0.5 ],
+
+    [523.3,0.25],[440.0,0.25],[392.0,0.25],[261.6,0.25],
+    [392.0,0.5 ],[523.3,0.25],[659.3,0.25],
+    [784.0,0.25],[659.3,0.25],[440.0,0.25],[392.0,0.25],
+    [523.3,1.0 ],
+
+    // Section D: triumphant buildup, return home
+    [261.6,0.25],[392.0,0.25],[523.3,0.25],[659.3,0.25],
+    [784.0,0.5 ],[659.3,0.5 ],
+    [440.0,0.25],[523.3,0.25],[659.3,0.25],[784.0,0.25],
+    [523.3,1.0 ],
+
+    [523.3,0.25],[659.3,0.25],[880.0,0.25],[784.0,0.25],
+    [659.3,0.5 ],[523.3,0.25],[440.0,0.25],
+    [392.0,0.25],[440.0,0.25],[523.3,0.25],[659.3,0.25],
+    [523.3,1.0 ],
   ];
 
-  // Bass line — one note per 2 beats, C3/G3/F3 range
+  // Bass: 32 beats matching melody
   const BASS = [
     [130.8,2],[196.0,2],[130.8,2],[196.0,2],
     [174.6,2],[196.0,2],[130.8,2],[196.0,2],
+    [130.8,2],[174.6,2],[196.0,2],[130.8,2],
+    [261.6,2],[196.0,2],[174.6,2],[130.8,2],
   ];
 
   function init() {
     if (ctx) return;
     ctx = new (window.AudioContext || window.webkitAudioContext)();
     master = ctx.createGain();
-    master.gain.value = muted ? 0 : 0.70;
+    master.gain.value = muted ? 0 : volume;
     master.connect(ctx.destination);
   }
 
@@ -536,7 +572,7 @@ const SFX = (() => {
     TUNE.forEach(([hz, b]) => { piano(hz, t, b * BEAT); t += b * BEAT; });
     const loopLen = TUNE.reduce((s,[,b]) => s + b, 0) * BEAT;
     t = t0;
-    BASS.forEach(([hz, b]) => { piano(hz, t, b * BEAT, 0.22); t += b * BEAT; });
+    BASS.forEach(([hz, b]) => { piano(hz, t, b * BEAT, 0.20); t += b * BEAT; });
     loopTimer = setTimeout(() => {
       if (!muted && ctx) scheduleLoop(ctx.currentTime + 0.05);
       else loopTimer = null;
@@ -564,12 +600,10 @@ const SFX = (() => {
     osc.frequency.setValueAtTime(620, now);
     osc.frequency.linearRampToValueAtTime(1150, now + 0.14);
     osc.frequency.exponentialRampToValueAtTime(480, now + 0.48);
-    // Vibrato
     const lfo = ctx.createOscillator(), lfog = ctx.createGain();
     lfo.frequency.value = 7.5; lfog.gain.value = 38;
     lfo.connect(lfog); lfog.connect(osc.frequency);
     lfo.start(now + 0.08); lfo.stop(now + 0.55);
-    // Harmonic for nasal quality
     const osc2 = ctx.createOscillator(), g2 = ctx.createGain();
     osc2.connect(g2); g2.connect(master); osc2.type = 'sine';
     osc2.frequency.setValueAtTime(1240, now);
@@ -582,12 +616,74 @@ const SFX = (() => {
     osc2.start(now); osc2.stop(now + 0.45);
   }
 
+  function hit(kind) {
+    if (!ctx || muted) return;
+    const now = ctx.currentTime;
+    const tone = (freq0, freq1, dur, type, vol) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(master); o.type = type || 'sine';
+      o.frequency.setValueAtTime(freq0, now);
+      if (freq1 !== freq0) o.frequency.exponentialRampToValueAtTime(freq1, now + dur * 0.7);
+      g.gain.setValueAtTime(0, now);
+      g.gain.linearRampToValueAtTime(vol || 0.22, now + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      o.start(now); o.stop(now + dur + 0.05);
+    };
+    const noise = (ftype, ffreq, dur, vol) => {
+      const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      const src = ctx.createBufferSource(), filt = ctx.createBiquadFilter(), g = ctx.createGain();
+      src.buffer = buf; filt.type = ftype; filt.frequency.value = ffreq;
+      src.connect(filt); filt.connect(g); g.connect(master);
+      g.gain.setValueAtTime(vol || 0.18, now);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      src.start(now); src.stop(now + dur + 0.02);
+    };
+    if (kind === 'trampoline' || kind === 'bounce') {
+      tone(180, 720, 0.18, 'sine', 0.28);
+    } else if (kind === 'rocket') {
+      noise('bandpass', 900, 0.22, 0.22); tone(120, 60, 0.25, 'sawtooth', 0.14);
+    } else if (kind === 'star') {
+      tone(1046.5, 1046.5, 0.32, 'sine', 0.20); tone(1318.5, 1318.5, 0.28, 'sine', 0.14);
+    } else if (kind === 'ring') {
+      tone(880, 1760, 0.15, 'sine', 0.22); tone(1320, 1320, 0.30, 'sine', 0.15);
+    } else if (kind === 'tornado') {
+      const o = ctx.createOscillator(), lfo = ctx.createOscillator();
+      const lg = ctx.createGain(), g = ctx.createGain();
+      lfo.frequency.value = 11; lg.gain.value = 120;
+      lfo.connect(lg); lg.connect(o.frequency);
+      o.connect(g); g.connect(master); o.type = 'sine'; o.frequency.value = 380;
+      g.gain.setValueAtTime(0.20, now); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+      lfo.start(now); lfo.stop(now + 0.38); o.start(now); o.stop(now + 0.38);
+    } else if (kind === 'geyser') {
+      noise('highpass', 1800, 0.30, 0.22); tone(220, 110, 0.28, 'sine', 0.14);
+    } else if (kind === 'orbit') {
+      tone(880, 110, 0.20, 'square', 0.16);
+    } else if (kind === 'ufo' || kind === 'alien') {
+      tone(660, 1320, 0.12, 'sine', 0.20); tone(990, 495, 0.18, 'sine', 0.14);
+    } else if (kind === 'satellite') {
+      tone(1100, 550, 0.14, 'sine', 0.18);
+    } else {
+      tone(440, 880, 0.12, 'sine', 0.18);
+    }
+  }
+
+  function setVol(v) {
+    volume = (v / 100) * 0.72;
+    localStorage.setItem('kittyVol', v);
+    if (master && !muted) {
+      master.gain.cancelScheduledValues(ctx.currentTime);
+      master.gain.setTargetAtTime(volume, ctx.currentTime, 0.04);
+    }
+  }
+
   function toggle() {
     muted = !muted;
     localStorage.setItem('kittyMuted', muted ? '1' : '0');
     if (master) {
       master.gain.cancelScheduledValues(ctx.currentTime);
-      master.gain.setTargetAtTime(muted ? 0 : 0.70, ctx.currentTime, 0.06);
+      master.gain.setTargetAtTime(muted ? 0 : volume, ctx.currentTime, 0.06);
     }
     if (!muted && ctx) {
       if (loopTimer) { clearTimeout(loopTimer); loopTimer = null; }
@@ -596,18 +692,15 @@ const SFX = (() => {
     return muted;
   }
 
-  return {
-    startMusic,
-    meow,
-    toggle,
-    isMuted: () => muted,
-  };
+  return { startMusic, meow, hit, setVol, toggle, isMuted: () => muted,
+           getVol: () => Math.round(volume / 0.72 * 100) };
 })();
 
 function toggleSound() {
   const m = SFX.toggle();
   document.getElementById('muteBtn').textContent = m ? '🔇' : '🔊';
 }
+function setVolume(v) { SFX.setVol(+v); }
 
 // ── WORLD GEN ──
 function generateWorld(toX) {
@@ -1911,6 +2004,7 @@ function checkCollisions() {
       shakePow=t.kind==='mega'?10:t.kind==='super'?7:4;
       spawnPoof(catX,catY,t.kind==='mega'?16:10);
       spawnParticles(catX,catY,col,t.kind==='mega'?22:14,t.kind==='mega'?1.4:1);
+      SFX.hit('trampoline');
       combo++;
       catVX += Math.min(combo, 12) * 0.4;
       if(combo>maxCombo)maxCombo=combo;
@@ -1939,17 +2033,20 @@ function checkCollisions() {
       spawnParticles(catX,catY,'#ff6600',28,1.5);
       spawnParticles(catX,catY,'#ffdd00',16,1.2);
       spawnPopup(catX,catY-50,'🚀 BLAST OFF!','#ff8800');
+      SFX.hit('rocket');
     } else if(b.kind==='star'){
       catVX+=6; catVY=Math.min(catVY,-8);
       shakePow=7;
       spawnParticles(catX,catY,'#ffdd00',20);
       spawnPopup(catX,catY-50,'⭐ STAR POWER!','#ffee44');
+      SFX.hit('star');
     } else if(b.kind==='ring'){
       catVX+=9; catVY*=0.6;
       shakePow=6;
       spawnParticles(catX,catY,'#ffee00',18);
       spawnParticles(catX,catY,'#ffffff',10);
       spawnPopup(catX,catY-50,'💛 SPEED RING!','#ffee00');
+      SFX.hit('ring');
     } else if(b.kind==='tornado'){
       catVX+=4+Math.random()*4;
       catVY=-(8+Math.random()*8);
@@ -1958,6 +2055,7 @@ function checkCollisions() {
       shakePow=9;
       spawnParticles(catX,catY,'#cc88ff',22,1.2);
       spawnPopup(catX,catY-50,'🌀 TORNADO!','#cc88ff');
+      SFX.hit('tornado');
     } else if(b.kind==='geyser'){
       catVY=-Math.max(Math.abs(catVY)+6,30)-Math.random()*10;
       catVX*=0.8;
@@ -1966,6 +2064,7 @@ function checkCollisions() {
       spawnParticles(catX,catY,'#44aaff',32,1.5);
       spawnParticles(catX,catY,'#ffffff',16,1.1);
       spawnPopup(catX,catY-55,'💧 GEYSER!','#44ccff');
+      SFX.hit('geyser');
     } else if(b.kind==='orbit'){
       catVY=-Math.max(Math.abs(catVY)+4,24)-Math.random()*8;
       catVX+=4+Math.random()*4;
@@ -1974,6 +2073,7 @@ function checkCollisions() {
       spawnParticles(catX,catY,'#00ccff',26,1.4);
       spawnParticles(catX,catY,'#aaeeff',12,0.9);
       spawnPopup(catX,catY-55,'⚡ ORBIT BOOST!','#00ccff');
+      SFX.hit('orbit');
     }
     catVX += Math.min(combo, 12) * 0.3;
     totalBounces++;
@@ -1986,8 +2086,7 @@ function checkCollisions() {
     const hitR = s.kind==='black_hole' ? 68 : 58;
     if(Math.hypot(catX-s.x,catY-s.y)>hitR) continue;
     s.hit=true;
-    const isHazard = s.kind==='black_hole'||s.kind==='asteroid'||s.kind==='gravity_wave';
-    if(!isHazard){ combo++; if(combo>maxCombo)maxCombo=combo; comboTimer=nextComboTimer(); }
+    combo++; if(combo>maxCombo)maxCombo=combo; comboTimer=nextComboTimer();
     if(s.kind==='ufo'){
       catVY=-Math.max(Math.abs(catVY),14)-12;
       catVX+=6+Math.random()*6;
@@ -1995,44 +2094,51 @@ function checkCollisions() {
       spawnParticles(catX,catY,'#44ffaa',30,1.6);
       spawnParticles(catX,catY,'#00ff88',14,1.2);
       spawnPopup(catX,catY-60,'👽 ABDUCTED!','#44ff88');
+      SFX.hit('ufo');
     } else if(s.kind==='satellite'){
       catVY=-Math.max(Math.abs(catVY),12)-8;
       catVX+=8;
       shakePow=10;
       spawnParticles(catX,catY,'#aaccff',22,1.2);
       spawnPopup(catX,catY-55,'🛰️ SATELLITE!','#aaccff');
+      SFX.hit('satellite');
     } else if(s.kind==='alien'){
       catVY-=22;
       catVX+=3+Math.random()*4;
       shakePow=12;
       spawnParticles(catX,catY,'#88ff44',26,1.4);
       spawnPopup(catX,catY-60,'👾 ALIEN BOOST!','#88ff44');
+      SFX.hit('alien');
     } else if(s.kind==='black_hole'){
-      catVY=Math.max(catVY,0)+16+Math.random()*8;
-      catVX*=0.5;
-      catSpin=(Math.random()-0.5)*0.6;
-      combo=Math.max(0,combo-5);
-      shakePow=16;
-      spawnParticles(catX,catY,'#ff4400',28,1.6);
-      spawnParticles(catX,catY,'#220000',14,1.2);
-      spawnPopup(catX,catY-60,'🕳️ BLACK HOLE!','#ff4400');
+      catVY=-Math.max(Math.abs(catVY)+8,35)-Math.random()*12;
+      catVX+=10+Math.random()*8;
+      catSpin=(catVX>0?1:-1)*0.4;
+      combo+=3; if(combo>maxCombo)maxCombo=combo; comboTimer=nextComboTimer();
+      shakePow=20;
+      spawnParticles(catX,catY,'#aa44ff',36,1.8);
+      spawnParticles(catX,catY,'#ffffff',14,1.2);
+      spawnPopup(catX,catY-60,'🕳️ SLINGSHOT!','#aa44ff');
+      SFX.hit('orbit');
     } else if(s.kind==='asteroid'){
-      catVY=Math.max(catVY,0)+12+Math.random()*6;
-      catVX*=(Math.random()<0.5?-1:1)*0.7;
-      catSpin=(Math.random()-0.5)*0.9;
-      combo=Math.max(0,combo-2);
+      catVY=-Math.max(Math.abs(catVY)+6,22)-Math.random()*8;
+      catVX+=6+Math.random()*5;
+      catSpin=(catVX>0?1:-1)*0.3;
+      combo+=2; if(combo>maxCombo)maxCombo=combo; comboTimer=nextComboTimer();
       shakePow=14;
-      spawnParticles(catX,catY,'#aa8855',22,1.3);
-      spawnParticles(catX,catY,'#ccaa77',10,1.0);
-      spawnPopup(catX,catY-55,'☄️ ASTEROID HIT!','#cc8833');
+      spawnParticles(catX,catY,'#cc9944',24,1.4);
+      spawnParticles(catX,catY,'#ffcc66',10,1.0);
+      spawnPopup(catX,catY-55,'☄️ ASTEROID RIDE!','#ffaa33');
+      SFX.hit('rocket');
     } else if(s.kind==='gravity_wave'){
-      catVY=Math.max(catVY,0)+14+Math.random()*6;
-      catVX*=0.65;
-      combo=Math.max(0,combo-1);
-      shakePow=10;
-      spawnParticles(catX,catY,'#9944ff',20,1.3);
-      spawnParticles(catX,catY,'#cc88ff',10,0.9);
-      spawnPopup(catX,catY-55,'▼ GRAVITY WAVE!','#aa55ff');
+      catVY=-Math.max(Math.abs(catVY)+5,28)-Math.random()*8;
+      catVX+=4+Math.random()*4;
+      catSpin=(Math.random()-0.5)*0.3;
+      combo+=2; if(combo>maxCombo)maxCombo=combo; comboTimer=nextComboTimer();
+      shakePow=12;
+      spawnParticles(catX,catY,'#8844ff',22,1.3);
+      spawnParticles(catX,catY,'#cc88ff',12,0.9);
+      spawnPopup(catX,catY-55,'🌊 WAVE LAUNCH!','#aa55ff');
+      SFX.hit('geyser');
     }
     totalBounces++;
     groundedFrames=0; skidding=false;
@@ -2051,6 +2157,7 @@ function checkCollisions() {
       spawnParticles(catX,catY,'#ddeeff',24,1.4);
       spawnParticles(catX,catY,'#ffffff',10,1.0);
       spawnPopup(catX,catY-55,'✈️ TURBULENCE!','#aaccff');
+      SFX.hit('rocket');
     } else if(s.kind==='balloon'){
       catVY=-(16+Math.random()*8);
       catVX*=0.9;
@@ -2059,6 +2166,7 @@ function checkCollisions() {
       spawnParticles(catX,catY,'#ff4466',20,1.3);
       spawnParticles(catX,catY,'#ffdd00',12,1.0);
       spawnPopup(catX,catY-55,'🎈 BALLOON LIFT!','#ff8800');
+      SFX.hit('star');
     } else if(s.kind==='pterodactyl'){
       catVY=-(14+Math.random()*8);
       catVX+=5+Math.random()*4;
@@ -2067,6 +2175,7 @@ function checkCollisions() {
       spawnParticles(catX,catY,'#887766',22,1.2);
       spawnParticles(catX,catY,'#bbaa99',8,0.9);
       spawnPopup(catX,catY-55,'🦕 PTERODACTYL RIDE!','#aa8866');
+      SFX.hit('bounce');
     }
     catVX+=Math.min(combo,12)*0.3;
     totalBounces++;
@@ -2503,6 +2612,7 @@ document.getElementById('splashHi').textContent='Best: '+highScore+' m';
 
 initSprites();
 document.getElementById('muteBtn').textContent = SFX.isMuted() ? '🔇' : '🔊';
+document.getElementById('volSlider').value = SFX.getVol();
 loop();
 </script>
 </body>
