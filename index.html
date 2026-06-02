@@ -519,6 +519,10 @@ let groundedFrames = 0;
 let skidding = false;
 let catSquish = 1, catStretch = 1;
 let screamTimer = 0;
+let lionModeTimer = 0;    // frames remaining for lion mode (15s)
+let chaosModeTimer = 0;   // frames remaining for chaos mode (20s)
+let lionTriggered = false;
+let chaosTriggered = false;
 let groundY;
 let catTrail = [];
 
@@ -739,7 +743,53 @@ const SFX = (() => {
     return muted;
   }
 
-  return { startMusic, meow, hit, setVol, toggle, isMuted: () => muted,
+  function roar() {
+    if(!ctx||muted) return;
+    const now=ctx.currentTime;
+    // Deep chest growl — sawtooth dropping from 180→60Hz
+    const o=ctx.createOscillator(),g=ctx.createGain();
+    o.connect(g); g.connect(master); o.type='sawtooth';
+    o.frequency.setValueAtTime(180,now); o.frequency.exponentialRampToValueAtTime(58,now+0.9);
+    g.gain.setValueAtTime(0,now); g.gain.linearRampToValueAtTime(0.5,now+0.04);
+    g.gain.exponentialRampToValueAtTime(0.0001,now+1.3);
+    o.start(now); o.stop(now+1.35);
+    // Overtone
+    const o2=ctx.createOscillator(),g2=ctx.createGain();
+    o2.connect(g2); g2.connect(master); o2.type='sine';
+    o2.frequency.setValueAtTime(350,now); o2.frequency.exponentialRampToValueAtTime(115,now+0.9);
+    g2.gain.setValueAtTime(0.22,now); g2.gain.exponentialRampToValueAtTime(0.0001,now+1.1);
+    o2.start(now); o2.stop(now+1.15);
+    // Low rumble noise
+    const buf=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*0.5),ctx.sampleRate);
+    const d=buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+    const src=ctx.createBufferSource(),filt=ctx.createBiquadFilter(),gn=ctx.createGain();
+    src.buffer=buf; filt.type='lowpass'; filt.frequency.value=380;
+    src.connect(filt); filt.connect(gn); gn.connect(master);
+    gn.gain.setValueAtTime(0.28,now); gn.gain.exponentialRampToValueAtTime(0.0001,now+0.55);
+    src.start(now);
+  }
+  function chaosRoar() {
+    if(!ctx||muted) return;
+    const now=ctx.currentTime;
+    // Three-layer explosion sweep
+    [[80,420,0.4],[120,680,0.28],[200,900,0.20]].forEach(([f0,f1,v],i)=>{
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.connect(g); g.connect(master); o.type=i===0?'sawtooth':'square';
+      o.frequency.setValueAtTime(f0,now); o.frequency.exponentialRampToValueAtTime(f1,now+0.25);
+      o.frequency.exponentialRampToValueAtTime(f0*0.4,now+1.2);
+      g.gain.setValueAtTime(0,now); g.gain.linearRampToValueAtTime(v,now+0.025);
+      g.gain.exponentialRampToValueAtTime(0.0001,now+1.8); o.start(now); o.stop(now+1.85);
+    });
+    // Noise blast
+    const buf=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*0.6),ctx.sampleRate);
+    const d=buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+    const src=ctx.createBufferSource(),filt=ctx.createBiquadFilter(),gn=ctx.createGain();
+    src.buffer=buf; filt.type='lowpass'; filt.frequency.value=700;
+    src.connect(filt); filt.connect(gn); gn.connect(master);
+    gn.gain.setValueAtTime(0.45,now); gn.gain.exponentialRampToValueAtTime(0.0001,now+0.7);
+    src.start(now);
+  }
+  return { startMusic, meow, hit, roar, chaosRoar, setVol, toggle, isMuted: () => muted,
            getVol: () => Math.round(volume / 0.72 * 100) };
 })();
 
@@ -808,6 +858,7 @@ function initGame() {
   launched = false; dragging = false;
   distance = 0; combo = 0; maxCombo = 0; totalBounces = 0;
   frameCount = 0; shakeX = 0; shakeY = 0; shakePow = 0; screamTimer = 0;
+  lionModeTimer = 0; chaosModeTimer = 0; lionTriggered = false; chaosTriggered = false;
   particles = []; poofClouds = []; popups = []; speedLines = []; catTrail = [];
   trampolines = []; boosters = []; clouds = []; rainbows = []; unicorns = []; bgStars = []; portals = [];
   flashAlpha = 0;
@@ -1354,6 +1405,70 @@ function drawStar5(x,y,r,c1,c2) {
   ctx.beginPath();
   for(let i=0;i<10;i++) { const a=(i/10)*Math.PI*2-Math.PI/2; const rr=i%2===0?r:r*0.4; i===0?ctx.moveTo(Math.cos(a)*rr,Math.sin(a)*rr):ctx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr); }
   ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+}
+
+// ── LION / CHAOS OVERLAYS ──
+function drawLionMane(x, y, angle) {
+  const sz = catIsFat ? 44 : 26;
+  const hx = catIsFat ? sz*0.45 : sz*0.4;
+  const hy = catIsFat ? -sz*0.85 : -sz*1.1;
+  const pulse = 1 + Math.sin(frameCount * 0.22) * 0.15;
+  const maneR = (catIsFat ? sz*0.95 : sz*1.05) * pulse;
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(angle); ctx.scale(catSquish, catStretch);
+  // Soft glow behind mane
+  const grd = ctx.createRadialGradient(hx, hy, maneR*0.25, hx, hy, maneR*1.3);
+  grd.addColorStop(0, 'rgba(255,170,0,0.55)');
+  grd.addColorStop(0.55, 'rgba(255,80,0,0.25)');
+  grd.addColorStop(1, 'rgba(255,40,0,0)');
+  ctx.beginPath(); ctx.arc(hx, hy, maneR*1.4, 0, Math.PI*2);
+  ctx.fillStyle = grd; ctx.fill();
+  // Rotating spiky mane
+  const spikes = 16;
+  const rot = frameCount * 0.012;
+  for(let i = 0; i < spikes; i++) {
+    const a = (i / spikes) * Math.PI * 2 + rot;
+    const outer = i%2===0 ? maneR : maneR*0.72;
+    const inner = maneR * 0.38;
+    ctx.beginPath();
+    ctx.moveTo(hx+Math.cos(a-0.22)*inner, hy+Math.sin(a-0.22)*inner);
+    ctx.lineTo(hx+Math.cos(a)*outer,       hy+Math.sin(a)*outer);
+    ctx.lineTo(hx+Math.cos(a+0.22)*inner,  hy+Math.sin(a+0.22)*inner);
+    ctx.closePath();
+    ctx.fillStyle = i%2===0 ? '#ff9900' : '#ffcc44';
+    ctx.shadowColor = '#ff6600'; ctx.shadowBlur = 6;
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawChaosAura(x, y) {
+  // Expanding electric rings
+  for(let i = 0; i < 3; i++) {
+    const phase = ((frameCount * 0.055 + i * 0.33) % 1);
+    const r = 30 + phase * 100;
+    const alpha = (1-phase) * 0.9;
+    const clrs = ['255,0,255','0,180,255','255,220,0'];
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.strokeStyle = `rgba(${clrs[i]},${alpha.toFixed(2)})`;
+    ctx.lineWidth = 3.5*(1-phase)+0.5;
+    ctx.stroke();
+  }
+  // Lightning arms (flicker each frame for crackle effect)
+  ctx.save(); ctx.lineWidth = 1.8;
+  for(let b = 0; b < 5; b++) {
+    const ba = (b/5)*Math.PI*2 + frameCount*0.08;
+    let bx=x, by=y;
+    ctx.strokeStyle = `rgba(220,140,255,${0.6+Math.random()*0.3})`;
+    ctx.beginPath(); ctx.moveTo(bx,by);
+    for(let s=0;s<5;s++){
+      bx+=Math.cos(ba)*13+(Math.random()-0.5)*16;
+      by+=Math.sin(ba)*13+(Math.random()-0.5)*16;
+      ctx.lineTo(bx,by);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 // ── CAT DRAWING ──
@@ -2052,13 +2167,11 @@ function checkCollisions() {
       spawnPoof(catX,catY,t.kind==='mega'?16:10);
       spawnParticles(catX,catY,col,t.kind==='mega'?22:14,t.kind==='mega'?1.4:1);
       SFX.hit('trampoline');
-      combo++;
+      comboAdd(1);
       catVX += Math.min(combo, 12) * 0.4;
-      if(combo>maxCombo)maxCombo=combo;
       totalBounces++;
       const msgs={1:'Boing!',2:'Double!',3:'Triple!🔥',4:'On Fire!🔥',5:'SUPER HOT!🔥🔥',6:'INSANE!⚡',7:'GODLIKE!💥',8:'LEGENDARY!🌟'};
       spawnPopup(catX,catY-40,msgs[Math.min(combo,8)]||`x${combo}!! 🚀`,'#ffdd00');
-      comboTimer=nextComboTimer();
       groundedFrames=0; skidding=false;
     }
   }
@@ -2069,9 +2182,7 @@ function checkCollisions() {
     const d=Math.hypot(catX-b.x,catY-b.y);
     if(d>50) continue;
     b.hit=true;
-    combo++;
-    if(combo>maxCombo)maxCombo=combo;
-    comboTimer=nextComboTimer();
+    comboAdd(1);
     if(b.kind==='rocket'){
       catVX=Math.max(catVX,0)+14+Math.random()*5;
       catVY=-7-Math.random()*4;
@@ -2134,7 +2245,7 @@ function checkCollisions() {
     if(Math.hypot(catX-s.x,catY-s.y)>hitR) continue;
     s.hit=true;
     const isHazard = s.kind==='black_hole'||s.kind==='asteroid'||s.kind==='gravity_wave';
-    if(!isHazard){ combo++; if(combo>maxCombo)maxCombo=combo; comboTimer=nextComboTimer(); }
+    if(!isHazard || chaosModeTimer>0) comboAdd(1);
     if(s.kind==='ufo'){
       catVY=-Math.max(Math.abs(catVY),14)-12;
       catVX+=6+Math.random()*6;
@@ -2158,31 +2269,37 @@ function checkCollisions() {
       spawnPopup(catX,catY-60,'👾 ALIEN BOOST!','#88ff44');
       SFX.hit('alien');
     } else if(s.kind==='black_hole'){
-      catVY=Math.max(catVY,0)+16+Math.random()*8;
-      catVX*=0.5;
+      if(chaosModeTimer>0){
+        catVY=-Math.max(Math.abs(catVY)+10,40)-Math.random()*12; catVX+=12+Math.random()*8;
+        spawnPopup(catX,catY-60,'💥 OBLITERATED!','#ff00ff');
+      } else { catVY=Math.max(catVY,0)+16+Math.random()*8; catVX*=0.5; }
       catSpin=(Math.random()-0.5)*0.5;
       shakePow=20;
       spawnParticles(catX,catY,'#aa44ff',36,1.8);
       spawnParticles(catX,catY,'#ffffff',14,1.2);
-      spawnPopup(catX,catY-60,'🕳️ CRUSHED!','#aa44ff');
+      if(chaosModeTimer<=0) spawnPopup(catX,catY-60,'🕳️ CRUSHED!','#aa44ff');
       SFX.hit('orbit');
     } else if(s.kind==='asteroid'){
-      catVY=Math.max(catVY,0)+12+Math.random()*6;
-      catVX*=(Math.random()<0.5?1:-1)*(0.5+Math.random()*0.4);
+      if(chaosModeTimer>0){
+        catVY=-Math.max(Math.abs(catVY)+8,28)-Math.random()*8; catVX+=8+Math.random()*6;
+        spawnPopup(catX,catY-55,'💥 SMASHED IT!','#ff8800');
+      } else { catVY=Math.max(catVY,0)+12+Math.random()*6; catVX*=(Math.random()<0.5?1:-1)*(0.5+Math.random()*0.4); }
       catSpin=(Math.random()-0.5)*0.5;
       shakePow=14;
       spawnParticles(catX,catY,'#cc9944',24,1.4);
       spawnParticles(catX,catY,'#ffcc66',10,1.0);
-      spawnPopup(catX,catY-55,'☄️ SMASHED!','#ffaa33');
+      if(chaosModeTimer<=0) spawnPopup(catX,catY-55,'☄️ SMASHED!','#ffaa33');
       SFX.hit('rocket');
     } else if(s.kind==='gravity_wave'){
-      catVY=Math.max(catVY,0)+14+Math.random()*6;
-      catVX*=0.65;
+      if(chaosModeTimer>0){
+        catVY=-Math.max(Math.abs(catVY)+6,24)-Math.random()*8; catVX+=6+Math.random()*4;
+        spawnPopup(catX,catY-55,'⚡ WAVE SURF!','#ff00ff');
+      } else { catVY=Math.max(catVY,0)+14+Math.random()*6; catVX*=0.65; }
       catSpin=(Math.random()-0.5)*0.3;
       shakePow=12;
       spawnParticles(catX,catY,'#8844ff',22,1.3);
       spawnParticles(catX,catY,'#cc88ff',12,0.9);
-      spawnPopup(catX,catY-55,'🌊 PULLED DOWN!','#aa55ff');
+      if(chaosModeTimer<=0) spawnPopup(catX,catY-55,'🌊 PULLED DOWN!','#aa55ff');
       SFX.hit('geyser');
     }
     totalBounces++;
@@ -2194,7 +2311,7 @@ function checkCollisions() {
     if(s.hit) continue;
     if(Math.hypot(catX-s.x,catY-s.y)>62) continue;
     s.hit=true;
-    combo++; if(combo>maxCombo)maxCombo=combo; comboTimer=nextComboTimer();
+    comboAdd(1);
     if(s.kind==='plane'){
       catVY=Math.min(catVY,0)-12-Math.random()*6;
       catVX+=10+Math.random()*4;
@@ -2242,7 +2359,7 @@ function checkCollisions() {
     shakePow = 22;
     spawnParticles(catX, catY, '#dd66ff', 40, 2.0);
     spawnParticles(catX, catY, '#ffffff', 18, 1.4);
-    combo += 5; if(combo>maxCombo)maxCombo=combo; comboTimer=nextComboTimer();
+    comboAdd(5);
     const wb = document.getElementById('warpBanner');
     wb.textContent = '⚡ WARP ZONE! +5,000 m ⚡';
     wb.style.opacity = '1';
@@ -2250,6 +2367,40 @@ function checkCollisions() {
     spawnPopup(catX - 25000, catY, '⚡ +5,000 m!', '#cc44ff');
     break;
   }
+}
+
+// ── LION / CHAOS MODE LOGIC ──
+function showModeBanner(text, color, durationMs) {
+  const wb = document.getElementById('warpBanner');
+  wb.textContent = text;
+  wb.style.color = color;
+  wb.style.textShadow = `0 0 28px ${color}, 0 0 60px ${color}88, 2px 2px 0 #000`;
+  wb.style.opacity = '1';
+  setTimeout(() => { wb.style.opacity='0'; wb.style.color=''; wb.style.textShadow=''; }, durationMs);
+}
+function checkModeActivation() {
+  if(combo>=20 && !chaosTriggered) {
+    chaosModeTimer=1200; chaosTriggered=true;
+    lionModeTimer=Math.max(lionModeTimer,900);
+    SFX.chaosRoar(); shakePow=30;
+    spawnParticles(catX,catY,'#ff00ff',40,2.5);
+    spawnParticles(catX,catY,'#00ffff',30,2.0);
+    spawnPopup(catX,catY-110,'⚡ CHAOS MODE! ⚡','#ff00ff');
+    showModeBanner('⚡ CHAOS MODE! ⚡','#cc00ff',2800);
+  } else if(combo>=10 && !lionTriggered) {
+    lionModeTimer=900; lionTriggered=true;
+    SFX.roar(); shakePow=18;
+    spawnParticles(catX,catY,'#ff8800',25,2.0);
+    spawnPopup(catX,catY-80,'🦁 LION MODE!','#ff8800');
+    showModeBanner('🦁 LION MODE! 🦁','#ff8800',2200);
+  }
+}
+function comboAdd(n) {
+  const mult = chaosModeTimer>0 ? 3 : lionModeTimer>0 ? 2 : 1;
+  combo += n*mult;
+  if(combo>maxCombo) maxCombo=combo;
+  comboTimer=nextComboTimer();
+  checkModeActivation();
 }
 
 // ── COMBO DISPLAY ──
@@ -2280,6 +2431,14 @@ function updateComboHUD() {
 function update() {
   frameCount++;
   if (screamTimer > 0) screamTimer--;
+  if (lionModeTimer > 0) lionModeTimer--;
+  if (chaosModeTimer > 0) {
+    chaosModeTimer--;
+    if(frameCount % 15 === 0) {
+      spawnParticles(catX, catY, '#ff00ff', 6, 1.8);
+      spawnParticles(catX, catY, '#00ffff', 4, 1.4);
+    }
+  }
   groundY = H * 0.78;
 
   if(!launched){
@@ -2312,15 +2471,18 @@ function update() {
     catY=groundY;
     const absVY=Math.abs(catVY);
     if(absVY>MIN_BOUNCE_VY){
-      catVY=-absVY*GROUND_BOUNCE;
+      const bounceMult = chaosModeTimer>0 ? 2.5 : lionModeTimer>0 ? 1.65 : 1.0;
+      catVY = Math.max(-absVY*GROUND_BOUNCE*bounceMult, -100);
       catVX*=GROUND_FRICTION;
       catSpin*=0.5;
-      shakePow=Math.min(absVY*0.9,12);
+      shakePow=Math.min(absVY*0.9, chaosModeTimer>0?22:lionModeTimer>0?16:12);
       if (absVY > 12) { screamTimer = 38; SFX.meow(); }
+      if(chaosModeTimer>0){ spawnParticles(catX,groundY,'#ff00ff',18,2.0); spawnParticles(catX,groundY,'#00ffff',12,1.5); }
+      else if(lionModeTimer>0) spawnParticles(catX,groundY,'#ff8800',14,1.6);
       spawnPoof(catX,groundY,8);
       spawnParticles(catX,groundY,'#aa8833',10);
       groundedFrames=0; skidding=true;
-      combo=0; comboTimer=0;
+      combo=0; comboTimer=0; lionTriggered=false; chaosTriggered=false;
     } else {
       // Sliding to stop
       catVY=0; catY=groundY;
@@ -2422,10 +2584,18 @@ function draw() {
   if(!launched||dragging) drawBand();
 
   const catDrawX=catX-cam, catDrawY=catY;
+  if(chaosModeTimer>0) drawChaosAura(catDrawX, catDrawY);
+  if(lionModeTimer>0) drawLionMane(catDrawX, catDrawY, catAngle);
   if(catIsFat) drawFatCat(catDrawX, catDrawY, catAngle);
   else if(catIsTieDye) drawTieDyeCat(catDrawX, catDrawY, catAngle);
   else if(catIsUnicornCat) drawUnicornCat(catDrawX, catDrawY, catAngle);
   else drawCat(catDrawX, catDrawY, catAngle);
+  // Chaos mode screen tint
+  if(chaosModeTimer>0){
+    const fade=Math.min(chaosModeTimer,90)/90 * Math.min(chaosModeTimer, 120)/120;
+    ctx.fillStyle=`rgba(100,0,220,${(fade*0.18).toFixed(3)})`;
+    ctx.fillRect(0,0,W,H);
+  }
 
   // Aiming guide dots
   if(dragging){
