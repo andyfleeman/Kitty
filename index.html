@@ -102,6 +102,13 @@ canvas { display:block; }
   transition:background 0.15s;
 }
 #muteBtn:active { background:rgba(40,20,0,0.65); }
+#warpBanner {
+  position:fixed; top:28%; left:0; right:0; text-align:center;
+  pointer-events:none; z-index:50;
+  font-size:clamp(26px,6vw,46px); font-weight:bold; font-family:Georgia,serif;
+  color:#dd88ff; text-shadow:0 0 28px #aa00ff, 0 0 60px #6600cc, 2px 2px 0 #440088;
+  opacity:0; transition:opacity 0.12s;
+}
 </style>
 </head>
 <body>
@@ -123,6 +130,12 @@ canvas { display:block; }
         <span class="wheel-label">Fat Cat Color</span>
       </div>
     </div>
+  </div>
+  <div class="fat-section" id="splashTieDyeSection">
+    <button class="fat-toggle-btn" id="splashTieDyeBtn" onclick="toggleTieDye()">🌈 Use Tie-Dye Cat</button>
+  </div>
+  <div class="fat-section" id="splashUniCatSection">
+    <button class="fat-toggle-btn" id="splashUniCatBtn" onclick="toggleUnicornCat()">🦄 Use Unicorn Cat</button>
   </div>
   <button id="startBtn">LAUNCH! 🚀</button>
   <div id="splashHi">Best: 0 m</div>
@@ -148,6 +161,12 @@ canvas { display:block; }
       </div>
     </div>
   </div>
+  <div class="fat-section" id="goTieDyeSection">
+    <button class="fat-toggle-btn" id="goTieDyeBtn" onclick="toggleTieDye()">🌈 Use Tie-Dye Cat</button>
+  </div>
+  <div class="fat-section" id="goUniCatSection">
+    <button class="fat-toggle-btn" id="goUniCatBtn" onclick="toggleUnicornCat()">🦄 Use Unicorn Cat</button>
+  </div>
   <button onclick="restartGame()">Again! 🐱</button>
 </div>
 
@@ -165,6 +184,7 @@ canvas { display:block; }
 
 <div id="comboBox"><div id="comboText"></div><div id="comboBar"><div id="comboBarFill"></div></div></div>
 <div id="instruct">Pull back on the cat to launch! 🐾</div>
+<div id="warpBanner"></div>
 
 <canvas id="c"></canvas>
 
@@ -422,7 +442,7 @@ let spaceObjects = [], spaceGenX = 0;
 let stratosphereObjects = [], stratGenX = 0;
 
 // Combo window shrinks at high combos — makes streaks feel earned
-function nextComboTimer() { return Math.max(72 - Math.floor(combo / 5) * 8, 40); }
+function nextComboTimer() { return Math.max(144 - Math.floor(combo / 5) * 16, 80); }
 let catPickedColor = localStorage.getItem('kittyPickedColor') || '#ff8c42';
 let fatCatPickedColor = localStorage.getItem('kittyFatPickedColor') || '#e8a020';
 let fatCatUnlocked = localStorage.getItem('kittyFatCat') === '1';
@@ -432,7 +452,12 @@ let particles = [];
 let popups = [];
 let poofClouds = [];
 let worldGenX = 0;
-let trampolines = [], boosters = [], clouds = [], rainbows = [], unicorns = [], bgStars = [];
+let trampolines = [], boosters = [], clouds = [], rainbows = [], unicorns = [], bgStars = [], portals = [];
+let flashAlpha = 0;
+let tieDyeCatUnlocked = localStorage.getItem('kittyTieDye') === '1';
+let unicornCatUnlocked = localStorage.getItem('kittyUniCat') === '1';
+let catIsTieDye = tieDyeCatUnlocked && localStorage.getItem('kittyUsingTieDye') === '1';
+let catIsUnicornCat = unicornCatUnlocked && localStorage.getItem('kittyUsingUniCat') === '1';
 let lastBoostX = 0;
 let groundedFrames = 0;
 let skidding = false;
@@ -622,6 +647,12 @@ function generateWorld(toX) {
       rainbows.push({ x: worldGenX, r: 160 + Math.random() * 130 });
     if (Math.random() < 0.1)
       unicorns.push({ x: worldGenX, dir: Math.random() < 0.5 ? 1 : -1, anim: Math.random() * 100 });
+    // Portals — very rare, only when cat is flying very high
+    if (catY < groundY - 450 && catX > 2000 && Math.random() < 0.006 &&
+        (!portals.length || portals.every(p => !p.active) || catX - Math.max(...portals.map(p=>p.x)) > 18000)) {
+      portals.push({ x: worldGenX + Math.random()*300, y: catY - 60 - Math.random()*220, r: 52, angle: 0, active: true });
+    }
+    if (portals.length > 6) portals = portals.filter(p => p.active);
     for (let i = 0; i < 4; i++)
       bgStars.push({ x: worldGenX + Math.random() * 300, y: Math.random() * H * 0.58, r: 0.5 + Math.random() * 2.5, tw: Math.random() * 200 });
   }
@@ -638,7 +669,8 @@ function initGame() {
   distance = 0; combo = 0; maxCombo = 0; totalBounces = 0;
   frameCount = 0; shakeX = 0; shakeY = 0; shakePow = 0; screamTimer = 0;
   particles = []; poofClouds = []; popups = []; speedLines = []; catTrail = [];
-  trampolines = []; boosters = []; clouds = []; rainbows = []; unicorns = []; bgStars = [];
+  trampolines = []; boosters = []; clouds = []; rainbows = []; unicorns = []; bgStars = []; portals = [];
+  flashAlpha = 0;
   worldGenX = 300; lastBoostX = 0; groundedFrames = 0; skidding = false;
   catSquish = 1; catStretch = 1;
   generateWorld(W * 5);
@@ -1185,10 +1217,10 @@ function drawStar5(x,y,r,c1,c2) {
 }
 
 // ── CAT DRAWING ──
-function drawCat(x, y, angle) {
+function drawCat(x, y, angle, pal) {
   ctx.save();
   ctx.translate(x,y); ctx.rotate(angle); ctx.scale(catSquish,catStretch);
-  const sz=26, cc=colorToPalette(catPickedColor);
+  const sz=26, cc=pal||colorToPalette(catPickedColor);
 
   if(combo>=3){
     const gc=['#ff8800','#ff4400','#ff0066','#aa00ff','#00ccff'];
@@ -1439,6 +1471,106 @@ function drawFatCat(x, y, angle) {
   }
 
   ctx.shadowBlur=0;
+  ctx.restore();
+}
+
+// Tie-dye: pass animated rainbow palette into drawCat
+function drawTieDyeCat(x, y, angle) {
+  const ph = (frameCount * 0.018) % 1;
+  const hx = f => hslStr(((ph + f) % 1 + 1) % 1, 0.88, 0.55);
+  drawCat(x, y, angle, {
+    body:    hx(0),
+    head:    hx(0.08),
+    outline: '#222',
+    inner:   hx(0.22),
+    stripe:  hx(0.38).replace('rgb(','rgba(').replace(')',',0.72)'),
+    tail:    hx(0.52),
+    tailLine:hx(0.62),
+  });
+}
+
+// Unicorn cat: rainbow cape + normal cat + golden horn
+function drawUnicornCat(x, y, angle) {
+  const sz = 26;
+  // Cape (behind body)
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(angle); ctx.scale(catSquish, catStretch);
+  const capeColors = ['#cc33ff','#5577ff','#22ccaa','#66dd22','#ffdd00','#ff8800','#ff3366'];
+  const wv = Math.sin(frameCount * 0.08) * sz * 0.14;
+  const cTop = -sz * 0.08, cBot = sz * 1.0;
+  ctx.beginPath();
+  ctx.moveTo(-sz*0.5, cTop);
+  ctx.quadraticCurveTo(-sz*0.8 + wv, (cTop+cBot)*0.5, -sz*0.3, cBot);
+  ctx.lineTo( sz*0.3, cBot);
+  ctx.quadraticCurveTo( sz*0.8 - wv, (cTop+cBot)*0.5,  sz*0.5, cTop);
+  ctx.closePath();
+  ctx.save(); ctx.clip();
+  const bH = (cBot - cTop) / capeColors.length;
+  capeColors.forEach((c, i) => { ctx.fillStyle=c; ctx.fillRect(-sz, cTop+i*bH, sz*3, bH+1); });
+  ctx.restore();
+  ctx.strokeStyle='#333'; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.restore();
+  // Base cat
+  drawCat(x, y, angle);
+  // Horn (on top of head)
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(angle); ctx.scale(catSquish, catStretch);
+  const hbx=0, hby=-sz*1.10, htx=sz*0.10, hty=-sz*1.66;
+  for (let i=0; i<5; i++) {
+    const t0=i/5, t1=(i+1)/5;
+    const x0=hbx+(htx-hbx)*t0, y0=hby+(hty-hby)*t0;
+    const x1=hbx+(htx-hbx)*t1, y1=hby+(hty-hby)*t1;
+    const w0=sz*0.115*(1-t0*0.7), w1=sz*0.115*(1-t1*0.7);
+    ctx.beginPath();
+    ctx.moveTo(x0-w0,y0); ctx.lineTo(x0+w0,y0);
+    ctx.lineTo(x1+w1,y1); ctx.lineTo(x1-w1,y1);
+    ctx.closePath();
+    ctx.fillStyle = i%2===0 ? '#ffe055' : '#ffb81a'; ctx.fill();
+  }
+  ctx.beginPath(); ctx.moveTo(hbx-sz*0.115,hby); ctx.lineTo(htx,hty); ctx.lineTo(hbx+sz*0.115,hby); ctx.closePath();
+  ctx.strokeStyle='#cc8800'; ctx.lineWidth=1.5; ctx.stroke();
+  const sp = Math.sin(frameCount*0.12)*0.45+0.55;
+  ctx.globalAlpha=sp; ctx.fillStyle='#fff8aa';
+  ctx.beginPath(); ctx.arc(htx,hty,sz*0.065,0,Math.PI*2); ctx.fill();
+  ctx.globalAlpha=1;
+  ctx.restore();
+}
+
+function drawPortal(p) {
+  const sx = p.x - cam, sy = p.y;
+  const r = p.r;
+  p.angle = (p.angle||0) + 0.038;
+  // Outer glow
+  const og = ctx.createRadialGradient(sx,sy,r*0.55,sx,sy,r*1.5);
+  og.addColorStop(0,'rgba(160,0,255,0.50)'); og.addColorStop(0.5,'rgba(80,0,200,0.22)'); og.addColorStop(1,'rgba(30,0,120,0)');
+  ctx.fillStyle=og; ctx.beginPath(); ctx.arc(sx,sy,r*1.5,0,Math.PI*2); ctx.fill();
+  // Spinning outer dots
+  ctx.save(); ctx.translate(sx,sy); ctx.rotate(p.angle);
+  for (let i=0;i<9;i++) {
+    const a=(i/9)*Math.PI*2;
+    const hue=(i/9*360+frameCount*3)%360;
+    ctx.fillStyle=`hsl(${hue},95%,68%)`;
+    ctx.beginPath(); ctx.arc(Math.cos(a)*r,Math.sin(a)*r,7,0,Math.PI*2); ctx.fill();
+  }
+  // Inner ring counter-rotating
+  ctx.rotate(-p.angle*2.4);
+  for (let i=0;i<6;i++) {
+    const a=(i/6)*Math.PI*2;
+    ctx.fillStyle='rgba(240,180,255,0.80)';
+    ctx.beginPath(); ctx.arc(Math.cos(a)*r*0.62,Math.sin(a)*r*0.62,5,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+  // Dark void center
+  const ig = ctx.createRadialGradient(sx,sy,0,sx,sy,r*0.54);
+  ig.addColorStop(0,'rgba(4,0,18,0.96)'); ig.addColorStop(0.65,'rgba(28,0,70,0.90)'); ig.addColorStop(1,'rgba(90,0,200,0.55)');
+  ctx.fillStyle=ig; ctx.beginPath(); ctx.arc(sx,sy,r*0.54,0,Math.PI*2); ctx.fill();
+  // Label
+  ctx.save();
+  ctx.font=`bold ${Math.round(r*0.33)}px Georgia,serif`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.shadowColor='#aa00ff'; ctx.shadowBlur=14;
+  ctx.fillStyle=`rgba(225,160,255,${0.75+Math.sin(frameCount*0.09)*0.25})`;
+  ctx.fillText('+5,000 m',sx,sy);
   ctx.restore();
 }
 
@@ -1940,6 +2072,30 @@ function checkCollisions() {
     totalBounces++;
     groundedFrames=0; skidding=false;
   }
+
+  // Portals
+  for (const p of portals) {
+    if (!p.active) continue;
+    if (Math.hypot(catX - p.x, catY - p.y) > p.r + 10) continue;
+    p.active = false;
+    catX += 25000;
+    cam = catX - W * 0.42;
+    catY = 120;
+    camY = catY - H * 0.5;
+    catVY = 6;
+    catVX = Math.max(catVX, 12);
+    flashAlpha = 0.92;
+    shakePow = 22;
+    spawnParticles(catX, catY, '#dd66ff', 40, 2.0);
+    spawnParticles(catX, catY, '#ffffff', 18, 1.4);
+    combo += 5; if(combo>maxCombo)maxCombo=combo; comboTimer=nextComboTimer();
+    const wb = document.getElementById('warpBanner');
+    wb.textContent = '⚡ WARP ZONE! +5,000 m ⚡';
+    wb.style.opacity = '1';
+    setTimeout(() => { wb.style.opacity = '0'; }, 2600);
+    spawnPopup(catX - 25000, catY, '⚡ +5,000 m!', '#cc44ff');
+    break;
+  }
 }
 
 // ── COMBO DISPLAY ──
@@ -2055,8 +2211,16 @@ function update() {
     highScore=dm;
     document.getElementById('hiDisplay').textContent=highScore+' m';
     if(highScore>=50000&&!fatCatUnlocked){
-      updateFatCatSwatches(); // sets fatCatUnlocked=true, saves, syncs UI
+      updateFatCatSwatches();
       spawnPopup(catX,catY-70,'🔓 FAT CAT UNLOCKED!','#ffdd00');
+    }
+    if(highScore>=75000&&!tieDyeCatUnlocked){
+      updateTieDyeUnlock();
+      spawnPopup(catX,catY-85,'🌈 TIE-DYE CAT UNLOCKED!','#ff44ff');
+    }
+    if(highScore>=100000&&!unicornCatUnlocked){
+      updateUnicornCatUnlock();
+      spawnPopup(catX,catY-100,'🦄 UNICORN CAT UNLOCKED!','#ff88ff');
     }
   }
 }
@@ -2098,11 +2262,14 @@ function draw() {
 
   for(const t of trampolines) drawTrampoline(t);
   for(const b of boosters) drawBooster(b);
+  for(const p of portals) if(p.active) drawPortal(p);
   drawSlingshot();
   if(!launched||dragging) drawBand();
 
   const catDrawX=catX-cam, catDrawY=catY;
   if(catIsFat) drawFatCat(catDrawX, catDrawY, catAngle);
+  else if(catIsTieDye) drawTieDyeCat(catDrawX, catDrawY, catAngle);
+  else if(catIsUnicornCat) drawUnicornCat(catDrawX, catDrawY, catAngle);
   else drawCat(catDrawX, catDrawY, catAngle);
 
   // Aiming guide dots
@@ -2135,6 +2302,16 @@ function draw() {
 
   drawParticles();
   ctx.restore(); // end world space (camY)
+
+  // Portal warp flash overlay
+  if (flashAlpha > 0.002) {
+    ctx.fillStyle = `rgba(100,0,220,${flashAlpha.toFixed(3)})`;
+    ctx.fillRect(0, 0, W, H);
+    flashAlpha *= 0.86;
+  } else {
+    flashAlpha = 0;
+  }
+
   ctx.restore();
 }
 
@@ -2215,11 +2392,56 @@ function syncColorWheels() {
   ['splashFatColorRow','goFatColorRow'].forEach(id => {
     document.getElementById(id).style.display = catIsFat ? 'flex' : 'none';
   });
+  ['splashTieDyeSection','goTieDyeSection'].forEach(id => {
+    document.getElementById(id).style.display = tieDyeCatUnlocked ? 'flex' : 'none';
+  });
+  ['splashTieDyeBtn','goTieDyeBtn'].forEach(id => {
+    document.getElementById(id).classList.toggle('fat-active', catIsTieDye);
+    document.getElementById(id).textContent = catIsTieDye ? '🌈 Tie-Dye Cat ON' : '🌈 Use Tie-Dye Cat';
+  });
+  ['splashUniCatSection','goUniCatSection'].forEach(id => {
+    document.getElementById(id).style.display = unicornCatUnlocked ? 'flex' : 'none';
+  });
+  ['splashUniCatBtn','goUniCatBtn'].forEach(id => {
+    document.getElementById(id).classList.toggle('fat-active', catIsUnicornCat);
+    document.getElementById(id).textContent = catIsUnicornCat ? '🦄 Unicorn Cat ON' : '🦄 Use Unicorn Cat';
+  });
 }
 function toggleFatCat() {
   if(!fatCatUnlocked) return;
   catIsFat = !catIsFat;
-  localStorage.setItem('kittyUsingFat', catIsFat ? '1' : '0');
+  if(catIsFat){ catIsTieDye=false; catIsUnicornCat=false; }
+  localStorage.setItem('kittyUsingFat',     catIsFat ? '1' : '0');
+  localStorage.setItem('kittyUsingTieDye',  '0');
+  localStorage.setItem('kittyUsingUniCat',  '0');
+  syncColorWheels();
+}
+function toggleTieDye() {
+  if(!tieDyeCatUnlocked) return;
+  catIsTieDye = !catIsTieDye;
+  if(catIsTieDye){ catIsFat=false; catIsUnicornCat=false; }
+  localStorage.setItem('kittyUsingTieDye', catIsTieDye ? '1' : '0');
+  localStorage.setItem('kittyUsingFat',    '0');
+  localStorage.setItem('kittyUsingUniCat', '0');
+  syncColorWheels();
+}
+function toggleUnicornCat() {
+  if(!unicornCatUnlocked) return;
+  catIsUnicornCat = !catIsUnicornCat;
+  if(catIsUnicornCat){ catIsFat=false; catIsTieDye=false; }
+  localStorage.setItem('kittyUsingUniCat', catIsUnicornCat ? '1' : '0');
+  localStorage.setItem('kittyUsingFat',    '0');
+  localStorage.setItem('kittyUsingTieDye', '0');
+  syncColorWheels();
+}
+function updateTieDyeUnlock() {
+  tieDyeCatUnlocked = true;
+  localStorage.setItem('kittyTieDye', '1');
+  syncColorWheels();
+}
+function updateUnicornCatUnlock() {
+  unicornCatUnlocked = true;
+  localStorage.setItem('kittyUniCat', '1');
   syncColorWheels();
 }
 function updateFatCatSwatches() {
