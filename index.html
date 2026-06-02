@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Kitty Launch!">
-<title>Kitty Launch!</title>
+<meta name="apple-mobile-web-app-title" content="Khaos Kitty">
+<title>Khaos Kitty</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body { background:#000; overflow:hidden; touch-action:none; user-select:none; }
@@ -56,7 +56,6 @@ canvas { display:block; }
 }
 #startBtn:active { transform:scale(0.95); }
 #splashHi { color:#ffcce8; margin-top:16px; font-size:15px; font-family:Georgia,serif; }
-#splashTips { color:rgba(255,200,240,0.7); margin-top:12px; font-size:12px; font-family:Georgia,serif; text-align:center; line-height:1.8; }
 #gameOver {
   position:fixed; inset:0; z-index:100;
   display:none; flex-direction:column; align-items:center; justify-content:center;
@@ -136,7 +135,7 @@ canvas { display:block; }
 
 <div id="splash">
   <span class="cat-bounce">🐱</span>
-  <h1>Kitty Launch!</h1>
+  <h1>Khaos Kitty</h1>
   <div class="splash-sub">Pull • Release • Fly Forever</div>
   <div class="cat-picker">
     <div class="cat-picker-label">Choose Your Cat</div>
@@ -174,7 +173,6 @@ canvas { display:block; }
   </div>
   <button id="startBtn">LAUNCH! 🚀</button>
   <div id="splashHi">Best: 0 m</div>
-  <div id="splashTips">🟢 Trampoline — bounce higher<br>🚀 Rocket — massive speed blast<br>⭐ Stars — height boost<br>💛 Ring — speed ring<br>🌀 Tornado — wild spin boost</div>
 </div>
 
 <div id="gameOver">
@@ -523,6 +521,7 @@ let lionModeTimer = 0;    // frames remaining for lion mode (15s)
 let chaosModeTimer = 0;   // frames remaining for chaos mode (20s)
 let lionTriggered = false;
 let chaosTriggered = false;
+let lionHitCount = 0;     // raw hits since lion mode activated (no multiplier)
 let groundY;
 let catTrail = [];
 
@@ -806,13 +805,13 @@ function generateWorld(toX) {
 
     // trampoline variety
     const roll = Math.random();
-    if (roll < 0.50) {
+    if (roll < 0.62) {
       const kind = Math.random() < 0.4 ? (Math.random() < 0.5 ? 'super' : 'mega') : 'normal';
       trampolines.push({ x: worldGenX, w: 75 + Math.random() * 55, kind, anim: 0 });
     }
 
     // boosters
-    if (Math.random() < 0.65) {
+    if (Math.random() < 0.75) {
       const kinds = ['rocket','star','ring','tornado','geyser','orbit'];
       const weights = [0.22, 0.18, 0.18, 0.15, 0.15, 0.12];
       let r = Math.random(), kind = kinds[0];
@@ -858,7 +857,7 @@ function initGame() {
   launched = false; dragging = false;
   distance = 0; combo = 0; maxCombo = 0; totalBounces = 0;
   frameCount = 0; shakeX = 0; shakeY = 0; shakePow = 0; screamTimer = 0;
-  lionModeTimer = 0; chaosModeTimer = 0; lionTriggered = false; chaosTriggered = false;
+  lionModeTimer = 0; chaosModeTimer = 0; lionTriggered = false; chaosTriggered = false; lionHitCount = 0;
   particles = []; poofClouds = []; popups = []; speedLines = []; catTrail = [];
   trampolines = []; boosters = []; clouds = []; rainbows = []; unicorns = []; bgStars = []; portals = [];
   flashAlpha = 0;
@@ -2379,7 +2378,8 @@ function showModeBanner(text, color, durationMs) {
   setTimeout(() => { wb.style.opacity='0'; wb.style.color=''; wb.style.textShadow=''; }, durationMs);
 }
 function checkModeActivation() {
-  if(combo>=20 && !chaosTriggered) {
+  // Chaos only accessible from inside lion mode — requires 20 additional raw hits
+  if(lionModeTimer>0 && lionHitCount>=20 && !chaosTriggered) {
     chaosModeTimer=1200; chaosTriggered=true;
     lionModeTimer=Math.max(lionModeTimer,900);
     SFX.chaosRoar(); shakePow=30;
@@ -2388,7 +2388,7 @@ function checkModeActivation() {
     spawnPopup(catX,catY-110,'⚡ CHAOS MODE! ⚡','#ff00ff');
     showModeBanner('⚡ CHAOS MODE! ⚡','#cc00ff',2800);
   } else if(combo>=10 && !lionTriggered) {
-    lionModeTimer=900; lionTriggered=true;
+    lionModeTimer=900; lionTriggered=true; lionHitCount=0;
     SFX.roar(); shakePow=18;
     spawnParticles(catX,catY,'#ff8800',25,2.0);
     spawnPopup(catX,catY-80,'🦁 LION MODE!','#ff8800');
@@ -2397,6 +2397,7 @@ function checkModeActivation() {
 }
 function comboAdd(n) {
   const mult = chaosModeTimer>0 ? 3 : lionModeTimer>0 ? 2 : 1;
+  if(lionModeTimer>0 && !chaosTriggered) lionHitCount += n;
   combo += n*mult;
   if(combo>maxCombo) maxCombo=combo;
   comboTimer=nextComboTimer();
