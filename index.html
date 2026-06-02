@@ -484,6 +484,10 @@ let cam, camY, catX, catY, catVX, catVY, catAngle, catSpin;
 let launched, dragging, dragX, dragY;
 let gameRunning = false;
 let frameCount = 0;
+// Migrate from old key if needed, then load
+if(!localStorage.getItem('kittyHS2') && localStorage.getItem('kittyHS')) {
+  localStorage.setItem('kittyHS2', localStorage.getItem('kittyHS'));
+}
 let highScore = +localStorage.getItem('kittyHS2') || 0;
 let distance = 0;
 let combo = 0, maxCombo = 0;
@@ -2359,6 +2363,7 @@ function update() {
   document.getElementById('distDisplay').textContent=dm+' m';
   if(dm>highScore){
     highScore=dm;
+    localStorage.setItem('kittyHS2',highScore);
     document.getElementById('hiDisplay').textContent=highScore+' m';
     if(highScore>=50000&&!fatCatUnlocked){
       updateFatCatSwatches();
