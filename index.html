@@ -451,7 +451,7 @@ let spaceObjects = [], spaceGenX = 0;
 let stratosphereObjects = [], stratGenX = 0;
 
 // Combo window shrinks at high combos — makes streaks feel earned
-function nextComboTimer() { return Math.max(144 - Math.floor(combo / 5) * 16, 80); }
+function nextComboTimer() { return Math.max(72 - Math.floor(combo / 5) * 8, 40); }
 let catPickedColor = localStorage.getItem('kittyPickedColor') || '#ff8c42';
 let fatCatPickedColor = localStorage.getItem('kittyFatPickedColor') || '#e8a020';
 let fatCatUnlocked = localStorage.getItem('kittyFatCat') === '1';
