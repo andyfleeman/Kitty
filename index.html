@@ -426,6 +426,7 @@ let lastBoostX = 0;
 let groundedFrames = 0;
 let skidding = false;
 let catSquish = 1, catStretch = 1;
+let screamTimer = 0;
 let groundY;
 let catTrail = [];
 
@@ -483,7 +484,7 @@ function initGame() {
   catVX = 0; catVY = 0; catAngle = 0; catSpin = 0;
   launched = false; dragging = false;
   distance = 0; combo = 0; maxCombo = 0; totalBounces = 0;
-  frameCount = 0; shakeX = 0; shakeY = 0; shakePow = 0;
+  frameCount = 0; shakeX = 0; shakeY = 0; shakePow = 0; screamTimer = 0;
   particles = []; poofClouds = []; popups = []; speedLines = []; catTrail = [];
   trampolines = []; boosters = []; clouds = []; rainbows = []; unicorns = []; bgStars = [];
   worldGenX = 300; lastBoostX = 0; groundedFrames = 0; skidding = false;
@@ -1126,10 +1127,23 @@ function drawCat(x, y, angle) {
   ctx.fillStyle='#ff5588'; ctx.fill(); ctx.strokeStyle='#cc2255'; ctx.lineWidth=1; ctx.stroke();
 
   // Mouth
-  ctx.strokeStyle=cc.outline; ctx.lineWidth=1.8; ctx.lineCap='round';
-  const moodY=catVY>2?-sz*0.22:-sz*0.27;
-  ctx.beginPath(); ctx.moveTo(0,-sz*0.335); ctx.quadraticCurveTo(-sz*0.18,-sz*0.3,-sz*0.22,moodY); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(0,-sz*0.335); ctx.quadraticCurveTo(sz*0.18,-sz*0.3,sz*0.22,moodY); ctx.stroke();
+  if (screamTimer > 0) {
+    const mcy=-sz*0.23, mw=sz*0.24, mh=sz*0.18;
+    ctx.beginPath(); ctx.ellipse(0,mcy,mw,mh,0,0,Math.PI*2);
+    ctx.fillStyle='#1a0808'; ctx.fill();
+    ctx.strokeStyle=cc.outline; ctx.lineWidth=1.8; ctx.stroke();
+    ctx.fillStyle='#ffffff';
+    for(let t=-1;t<=1;t++){
+      ctx.beginPath(); ctx.roundRect(t*sz*0.086-sz*0.038,mcy-mh*0.88,sz*0.072,mh*0.50,2); ctx.fill();
+    }
+    ctx.beginPath(); ctx.ellipse(0,mcy+mh*0.30,mw*0.50,mh*0.40,0,0,Math.PI*2);
+    ctx.fillStyle='#ff4455'; ctx.fill();
+  } else {
+    ctx.strokeStyle=cc.outline; ctx.lineWidth=1.8; ctx.lineCap='round';
+    const moodY=catVY>2?-sz*0.22:-sz*0.27;
+    ctx.beginPath(); ctx.moveTo(0,-sz*0.335); ctx.quadraticCurveTo(-sz*0.18,-sz*0.3,-sz*0.22,moodY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,-sz*0.335); ctx.quadraticCurveTo(sz*0.18,-sz*0.3,sz*0.22,moodY); ctx.stroke();
+  }
 
   // Whiskers
   ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.lineWidth=1.2; ctx.lineCap='round';
@@ -1236,10 +1250,23 @@ function drawFatCat(x, y, angle) {
   ctx.fillStyle='#ff5577'; ctx.fill(); ctx.strokeStyle='#cc2244'; ctx.lineWidth=1.2; ctx.stroke();
 
   // Mouth
-  ctx.strokeStyle=cc.outline; ctx.lineWidth=2.2; ctx.lineCap='round';
-  const moodY=catVY>2?-sz*0.1:-sz*0.155;
-  ctx.beginPath(); ctx.moveTo(0,-sz*0.215); ctx.quadraticCurveTo(-sz*0.22,-sz*0.19,-sz*0.26,moodY); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(0,-sz*0.215); ctx.quadraticCurveTo(sz*0.22,-sz*0.19,sz*0.26,moodY); ctx.stroke();
+  if (screamTimer > 0) {
+    const mcy=-sz*0.12, mw=sz*0.26, mh=sz*0.19;
+    ctx.beginPath(); ctx.ellipse(0,mcy,mw,mh,0,0,Math.PI*2);
+    ctx.fillStyle='#1a0808'; ctx.fill();
+    ctx.strokeStyle=cc.outline; ctx.lineWidth=2.5; ctx.stroke();
+    ctx.fillStyle='#ffffff';
+    for(let t=-1;t<=1;t++){
+      ctx.beginPath(); ctx.roundRect(t*sz*0.088-sz*0.04,mcy-mh*0.88,sz*0.074,mh*0.50,3); ctx.fill();
+    }
+    ctx.beginPath(); ctx.ellipse(0,mcy+mh*0.30,mw*0.50,mh*0.40,0,0,Math.PI*2);
+    ctx.fillStyle='#ff4455'; ctx.fill();
+  } else {
+    ctx.strokeStyle=cc.outline; ctx.lineWidth=2.2; ctx.lineCap='round';
+    const moodY=catVY>2?-sz*0.1:-sz*0.155;
+    ctx.beginPath(); ctx.moveTo(0,-sz*0.215); ctx.quadraticCurveTo(-sz*0.22,-sz*0.19,-sz*0.26,moodY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,-sz*0.215); ctx.quadraticCurveTo(sz*0.22,-sz*0.19,sz*0.26,moodY); ctx.stroke();
+  }
 
   // Thick whiskers
   ctx.strokeStyle='rgba(255,255,255,0.88)'; ctx.lineWidth=1.5; ctx.lineCap='round';
@@ -1790,6 +1817,7 @@ function updateComboHUD() {
 // ── MAIN LOOP ──
 function update() {
   frameCount++;
+  if (screamTimer > 0) screamTimer--;
   groundY = H * 0.78;
 
   if(!launched){
@@ -1826,6 +1854,7 @@ function update() {
       catVX*=GROUND_FRICTION;
       catSpin*=0.5;
       shakePow=Math.min(absVY*0.9,12);
+      if (absVY > 12) screamTimer = 38;
       spawnPoof(catX,groundY,8);
       spawnParticles(catX,groundY,'#aa8833',10);
       groundedFrames=0; skidding=true;
@@ -1847,11 +1876,12 @@ function update() {
   // Air drag
   catVX*=0.9985;
 
-  // Camera — always follow cat (horizontal + vertical)
-  const targetCam=catX-W*0.42;
-  cam+=(targetCam-cam)*0.12;
-  const targetCamY=catY-H*0.5;
-  camY+=(targetCamY-camY)*0.1;
+  // Camera — velocity look-ahead keeps cat centered even on fast jumps
+  const targetCam=catX-W*0.42+catVX*2.8;
+  const camLerp=0.14+Math.min(Math.abs(catVX)*0.003,0.08);
+  cam+=(targetCam-cam)*camLerp;
+  const targetCamY=catY-H*0.5+catVY*1.5;
+  camY+=(targetCamY-camY)*0.12;
 
   distance=Math.max(0,Math.floor((catX-SLING_X)/5));
 
