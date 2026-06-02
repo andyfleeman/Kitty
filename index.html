@@ -92,6 +92,16 @@ canvas { display:block; }
 .fat-toggle-btn:hover,.fat-toggle-btn.fat-active { background:rgba(255,200,50,0.35); border-color:#ffdd44; box-shadow:0 0 14px rgba(255,220,50,0.45); color:#fff; }
 #comboBar { width:120px; height:4px; background:rgba(255,255,255,0.2); border-radius:2px; margin:5px auto 0; overflow:hidden; opacity:0; transition:opacity 0.2s; }
 #comboBarFill { height:100%; background:#ffdd00; border-radius:2px; transition:width 0.05s linear; }
+#muteBtn {
+  background:rgba(0,0,0,0.5);
+  border:2px solid rgba(255,220,80,0.55);
+  border-radius:14px; padding:7px 13px;
+  color:#fff; backdrop-filter:blur(8px);
+  font-size:19px; cursor:pointer; pointer-events:auto;
+  font-family:Georgia,serif; line-height:1; align-self:flex-start;
+  transition:background 0.15s;
+}
+#muteBtn:active { background:rgba(40,20,0,0.65); }
 </style>
 </head>
 <body>
@@ -146,6 +156,7 @@ canvas { display:block; }
     <div class="hud-label">Distance</div>
     <div class="hud-val" id="distDisplay">0 m</div>
   </div>
+  <button id="muteBtn" onclick="toggleSound()">🔊</button>
   <div class="hud-box">
     <div class="hud-label">Best</div>
     <div class="hud-val" id="hiDisplay">0 m</div>
@@ -431,6 +442,147 @@ let groundY;
 let catTrail = [];
 
 function slingY() { return groundY - 95; }
+
+// ── SOUND ────────────────────────────────────────────────────────────────────
+const SFX = (() => {
+  let ctx = null, master = null;
+  let muted = localStorage.getItem('kittyMuted') === '1';
+  let loopTimer = null;
+
+  const BPM = 108, BEAT = 60 / BPM;
+
+  // Pentatonic C-major melody  [hz, beats]
+  const TUNE = [
+    [523.3,0.25],[659.3,0.25],[784.0,0.25],[659.3,0.25],
+    [880.0,0.5 ],[659.3,0.25],[523.3,0.25],
+    [587.3,0.25],[784.0,0.25],[659.3,0.25],[440.0,0.25],
+    [523.3,0.5 ],[392.0,0.5 ],
+
+    [523.3,0.25],[784.0,0.25],[659.3,0.25],[523.3,0.25],
+    [440.0,0.5 ],[587.3,0.25],[659.3,0.25],
+    [784.0,0.25],[659.3,0.25],[523.3,0.25],[440.0,0.25],
+    [440.0,0.5 ],[392.0,0.5 ],
+
+    [261.6,0.25],[392.0,0.25],[523.3,0.25],[659.3,0.25],
+    [784.0,0.5 ],[880.0,0.25],[784.0,0.25],
+    [659.3,0.25],[523.3,0.25],[440.0,0.25],[392.0,0.25],
+    [523.3,1.0 ],
+
+    [440.0,0.25],[523.3,0.25],[659.3,0.25],[784.0,0.25],
+    [880.0,0.5 ],[784.0,0.25],[659.3,0.25],
+    [587.3,0.25],[440.0,0.25],[392.0,0.25],[261.6,0.25],
+    [261.6,0.5 ],[523.3,0.5 ],
+  ];
+
+  // Bass line — one note per 2 beats, C3/G3/F3 range
+  const BASS = [
+    [130.8,2],[196.0,2],[130.8,2],[196.0,2],
+    [174.6,2],[196.0,2],[130.8,2],[196.0,2],
+  ];
+
+  function init() {
+    if (ctx) return;
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    master = ctx.createGain();
+    master.gain.value = muted ? 0 : 0.70;
+    master.connect(ctx.destination);
+  }
+
+  function piano(freq, t, dur, vol) {
+    vol = vol || 0.36;
+    [[1,1.0],[2,0.32],[3,0.13]].forEach(([harm,amp]) => {
+      const osc = ctx.createOscillator();
+      const g   = ctx.createGain();
+      osc.connect(g); g.connect(master);
+      osc.type = harm === 3 ? 'triangle' : 'sine';
+      osc.frequency.value = freq * harm;
+      const pk = vol * amp;
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(pk, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(pk * 0.52, t + 0.09);
+      g.gain.setValueAtTime(pk * 0.52, t + Math.max(dur - 0.02, 0.01));
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.28);
+      osc.start(t); osc.stop(t + dur + 0.35);
+    });
+  }
+
+  function scheduleLoop(t0) {
+    let t = t0;
+    TUNE.forEach(([hz, b]) => { piano(hz, t, b * BEAT); t += b * BEAT; });
+    const loopLen = TUNE.reduce((s,[,b]) => s + b, 0) * BEAT;
+    t = t0;
+    BASS.forEach(([hz, b]) => { piano(hz, t, b * BEAT, 0.22); t += b * BEAT; });
+    loopTimer = setTimeout(() => {
+      if (!muted && ctx) scheduleLoop(ctx.currentTime + 0.05);
+      else loopTimer = null;
+    }, (loopLen - 0.35) * 1000);
+  }
+
+  function startMusic() {
+    init();
+    if (ctx.state === 'suspended') ctx.resume();
+    if (loopTimer) return;
+    scheduleLoop(ctx.currentTime + 0.08);
+  }
+
+  function meow() {
+    if (!ctx || muted) return;
+    const now = ctx.currentTime;
+    const g = ctx.createGain();
+    g.connect(master);
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.55, now + 0.04);
+    g.gain.setValueAtTime(0.55, now + 0.28);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.52);
+    const osc = ctx.createOscillator();
+    osc.connect(g); osc.type = 'sine';
+    osc.frequency.setValueAtTime(620, now);
+    osc.frequency.linearRampToValueAtTime(1150, now + 0.14);
+    osc.frequency.exponentialRampToValueAtTime(480, now + 0.48);
+    // Vibrato
+    const lfo = ctx.createOscillator(), lfog = ctx.createGain();
+    lfo.frequency.value = 7.5; lfog.gain.value = 38;
+    lfo.connect(lfog); lfog.connect(osc.frequency);
+    lfo.start(now + 0.08); lfo.stop(now + 0.55);
+    // Harmonic for nasal quality
+    const osc2 = ctx.createOscillator(), g2 = ctx.createGain();
+    osc2.connect(g2); g2.connect(master); osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(1240, now);
+    osc2.frequency.linearRampToValueAtTime(2300, now + 0.14);
+    osc2.frequency.exponentialRampToValueAtTime(960, now + 0.48);
+    g2.gain.setValueAtTime(0, now);
+    g2.gain.linearRampToValueAtTime(0.17, now + 0.04);
+    g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.40);
+    osc.start(now); osc.stop(now + 0.58);
+    osc2.start(now); osc2.stop(now + 0.45);
+  }
+
+  function toggle() {
+    muted = !muted;
+    localStorage.setItem('kittyMuted', muted ? '1' : '0');
+    if (master) {
+      master.gain.cancelScheduledValues(ctx.currentTime);
+      master.gain.setTargetAtTime(muted ? 0 : 0.70, ctx.currentTime, 0.06);
+    }
+    if (!muted && ctx) {
+      if (loopTimer) { clearTimeout(loopTimer); loopTimer = null; }
+      scheduleLoop(ctx.currentTime + 0.05);
+    }
+    return muted;
+  }
+
+  return {
+    startMusic,
+    meow,
+    toggle,
+    isMuted: () => muted,
+  };
+})();
+
+function toggleSound() {
+  const m = SFX.toggle();
+  document.getElementById('muteBtn').textContent = m ? '🔇' : '🔊';
+}
 
 // ── WORLD GEN ──
 function generateWorld(toX) {
@@ -1854,7 +2006,7 @@ function update() {
       catVX*=GROUND_FRICTION;
       catSpin*=0.5;
       shakePow=Math.min(absVY*0.9,12);
-      if (absVY > 12) screamTimer = 38;
+      if (absVY > 12) { screamTimer = 38; SFX.meow(); }
       spawnPoof(catX,groundY,8);
       spawnParticles(catX,groundY,'#aa8833',10);
       groundedFrames=0; skidding=true;
@@ -2116,16 +2268,19 @@ function showGameOver(){
 function restartGame(){
   document.getElementById('gameOver').style.display='none';
   gameRunning=true; initGame();
+  SFX.startMusic();
 }
 
 document.getElementById('startBtn').addEventListener('click',()=>{
   document.getElementById('splash').style.display='none';
   document.getElementById('splashHi').textContent='Best: '+highScore+' m';
   gameRunning=true; initGame();
+  SFX.startMusic();
 });
 document.getElementById('splashHi').textContent='Best: '+highScore+' m';
 
 initSprites();
+document.getElementById('muteBtn').textContent = SFX.isMuted() ? '🔇' : '🔊';
 loop();
 </script>
 </body>
