@@ -115,6 +115,21 @@ canvas { display:block; }
   color:#dd88ff; text-shadow:0 0 28px #aa00ff, 0 0 60px #6600cc, 2px 2px 0 #440088;
   opacity:0; transition:opacity 0.12s;
 }
+.cat-picker { display:flex; flex-direction:column; align-items:center; margin-bottom:18px; }
+.cat-picker-label { color:#ffcce8; font-size:11px; letter-spacing:2.5px; text-transform:uppercase; font-family:Georgia,serif; margin-bottom:12px; }
+.cat-grid { display:flex; flex-direction:row; gap:14px; justify-content:center; }
+.cat-avatar-wrap { display:flex; flex-direction:column; align-items:center; gap:5px; cursor:pointer; }
+.cat-avatar-frame { position:relative; width:68px; height:68px; border-radius:50%; background:rgba(20,10,40,0.88); border:3px solid rgba(255,255,255,0.2); transition:border-color 0.18s,box-shadow 0.18s; overflow:hidden; }
+.cat-avatar-frame canvas { width:68px; height:68px; display:block; }
+.cat-avatar-wrap.selected .cat-avatar-frame { border-color:#ffd84a; box-shadow:0 0 18px rgba(255,216,74,0.65),0 0 6px rgba(255,216,74,0.35); }
+.cat-avatar-wrap.locked .cat-avatar-frame { filter:grayscale(0.8) brightness(0.45); }
+.cat-lock { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:22px; pointer-events:none; display:none; }
+.cat-avatar-label { font-size:10px; color:rgba(255,220,180,0.85); font-family:Georgia,serif; text-align:center; letter-spacing:0.5px; }
+.cat-avatar-wrap.locked .cat-avatar-label { color:rgba(200,180,200,0.45); }
+.cat-color-row { display:flex; align-items:center; gap:10px; margin-top:10px; }
+.cat-wheel-sm { width:36px; height:36px; border-radius:50%; border:2px solid rgba(255,255,255,0.45); cursor:pointer; padding:2px; background:none; box-shadow:0 0 10px rgba(255,255,255,0.18); }
+.cat-wheel-sm::-webkit-color-swatch-wrapper { padding:0; border-radius:50%; }
+.cat-wheel-sm::-webkit-color-swatch { border:none; border-radius:50%; }
 </style>
 </head>
 <body>
@@ -123,25 +138,39 @@ canvas { display:block; }
   <span class="cat-bounce">🐱</span>
   <h1>Kitty Launch!</h1>
   <div class="splash-sub">Pull • Release • Fly Forever</div>
-  <div class="color-picker">
-    <div class="color-picker-label">Choose Your Cat</div>
-    <div class="wheel-row">
-      <input type="color" id="splashCatColor" class="cat-wheel" value="#ff8c42">
-      <span class="wheel-label">Cat Color</span>
-    </div>
-    <div class="fat-section" id="splashFatSection">
-      <button class="fat-toggle-btn" id="splashFatBtn" onclick="toggleFatCat()">🐱 Use Fat Cat</button>
-      <div class="wheel-row" id="splashFatColorRow" style="display:none">
-        <input type="color" id="splashFatColor" class="cat-wheel" value="#e8a020">
-        <span class="wheel-label">Fat Cat Color</span>
+  <div class="cat-picker">
+    <div class="cat-picker-label">Choose Your Cat</div>
+    <div class="cat-grid">
+      <div class="cat-avatar-wrap" id="sw-regular" onclick="selectCat('regular')">
+        <div class="cat-avatar-frame"><canvas id="av-s-regular" width="64" height="64"></canvas></div>
+        <div class="cat-avatar-label">Cat</div>
+      </div>
+      <div class="cat-avatar-wrap" id="sw-fat" onclick="selectCat('fat')">
+        <div class="cat-avatar-frame">
+          <canvas id="av-s-fat" width="64" height="64"></canvas>
+          <div class="cat-lock" id="sl-fat">🔒</div>
+        </div>
+        <div class="cat-avatar-label">Fat Cat</div>
+      </div>
+      <div class="cat-avatar-wrap" id="sw-tiedye" onclick="selectCat('tiedye')">
+        <div class="cat-avatar-frame">
+          <canvas id="av-s-tiedye" width="64" height="64"></canvas>
+          <div class="cat-lock" id="sl-tiedye">🔒</div>
+        </div>
+        <div class="cat-avatar-label">Tie-Dye</div>
+      </div>
+      <div class="cat-avatar-wrap" id="sw-unicat" onclick="selectCat('unicat')">
+        <div class="cat-avatar-frame">
+          <canvas id="av-s-unicat" width="64" height="64"></canvas>
+          <div class="cat-lock" id="sl-unicat">🔒</div>
+        </div>
+        <div class="cat-avatar-label">Unicorn</div>
       </div>
     </div>
-  </div>
-  <div class="fat-section" id="splashTieDyeSection">
-    <button class="fat-toggle-btn" id="splashTieDyeBtn" onclick="toggleTieDye()">🌈 Use Tie-Dye Cat</button>
-  </div>
-  <div class="fat-section" id="splashUniCatSection">
-    <button class="fat-toggle-btn" id="splashUniCatBtn" onclick="toggleUnicornCat()">🦄 Use Unicorn Cat</button>
+    <div class="cat-color-row" id="splash-color-row">
+      <input type="color" id="splashCatColor" class="cat-wheel-sm" value="#ff8c42">
+      <span class="wheel-label">Color</span>
+    </div>
   </div>
   <button id="startBtn">LAUNCH! 🚀</button>
   <div id="splashHi">Best: 0 m</div>
@@ -153,25 +182,39 @@ canvas { display:block; }
   <div id="goStats">0 m</div>
   <div id="goExtra"></div>
   <div id="goHi">Best: 0 m</div>
-  <div class="color-picker">
-    <div class="color-picker-label">Choose Your Cat</div>
-    <div class="wheel-row">
-      <input type="color" id="goCatColor" class="cat-wheel" value="#ff8c42">
-      <span class="wheel-label">Cat Color</span>
-    </div>
-    <div class="fat-section" id="goFatSection">
-      <button class="fat-toggle-btn" id="goFatBtn" onclick="toggleFatCat()">🐱 Use Fat Cat</button>
-      <div class="wheel-row" id="goFatColorRow" style="display:none">
-        <input type="color" id="goFatColor" class="cat-wheel" value="#e8a020">
-        <span class="wheel-label">Fat Cat Color</span>
+  <div class="cat-picker">
+    <div class="cat-picker-label">Choose Your Cat</div>
+    <div class="cat-grid">
+      <div class="cat-avatar-wrap" id="gw-regular" onclick="selectCat('regular')">
+        <div class="cat-avatar-frame"><canvas id="av-g-regular" width="64" height="64"></canvas></div>
+        <div class="cat-avatar-label">Cat</div>
+      </div>
+      <div class="cat-avatar-wrap" id="gw-fat" onclick="selectCat('fat')">
+        <div class="cat-avatar-frame">
+          <canvas id="av-g-fat" width="64" height="64"></canvas>
+          <div class="cat-lock" id="gl-fat">🔒</div>
+        </div>
+        <div class="cat-avatar-label">Fat Cat</div>
+      </div>
+      <div class="cat-avatar-wrap" id="gw-tiedye" onclick="selectCat('tiedye')">
+        <div class="cat-avatar-frame">
+          <canvas id="av-g-tiedye" width="64" height="64"></canvas>
+          <div class="cat-lock" id="gl-tiedye">🔒</div>
+        </div>
+        <div class="cat-avatar-label">Tie-Dye</div>
+      </div>
+      <div class="cat-avatar-wrap" id="gw-unicat" onclick="selectCat('unicat')">
+        <div class="cat-avatar-frame">
+          <canvas id="av-g-unicat" width="64" height="64"></canvas>
+          <div class="cat-lock" id="gl-unicat">🔒</div>
+        </div>
+        <div class="cat-avatar-label">Unicorn</div>
       </div>
     </div>
-  </div>
-  <div class="fat-section" id="goTieDyeSection">
-    <button class="fat-toggle-btn" id="goTieDyeBtn" onclick="toggleTieDye()">🌈 Use Tie-Dye Cat</button>
-  </div>
-  <div class="fat-section" id="goUniCatSection">
-    <button class="fat-toggle-btn" id="goUniCatBtn" onclick="toggleUnicornCat()">🦄 Use Unicorn Cat</button>
+    <div class="cat-color-row" id="go-color-row">
+      <input type="color" id="goCatColor" class="cat-wheel-sm" value="#ff8c42">
+      <span class="wheel-label">Color</span>
+    </div>
   </div>
   <button onclick="restartGame()">Again! 🐱</button>
 </div>
@@ -199,7 +242,7 @@ canvas { display:block; }
 
 <script>
 const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
+let ctx = canvas.getContext('2d');
 let W, H;
 function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
 resize();
@@ -2086,7 +2129,8 @@ function checkCollisions() {
     const hitR = s.kind==='black_hole' ? 68 : 58;
     if(Math.hypot(catX-s.x,catY-s.y)>hitR) continue;
     s.hit=true;
-    combo++; if(combo>maxCombo)maxCombo=combo; comboTimer=nextComboTimer();
+    const isHazard = s.kind==='black_hole'||s.kind==='asteroid'||s.kind==='gravity_wave';
+    if(!isHazard){ combo++; if(combo>maxCombo)maxCombo=combo; comboTimer=nextComboTimer(); }
     if(s.kind==='ufo'){
       catVY=-Math.max(Math.abs(catVY),14)-12;
       catVX+=6+Math.random()*6;
@@ -2110,34 +2154,31 @@ function checkCollisions() {
       spawnPopup(catX,catY-60,'👾 ALIEN BOOST!','#88ff44');
       SFX.hit('alien');
     } else if(s.kind==='black_hole'){
-      catVY=-Math.max(Math.abs(catVY)+8,35)-Math.random()*12;
-      catVX+=10+Math.random()*8;
-      catSpin=(catVX>0?1:-1)*0.4;
-      combo+=3; if(combo>maxCombo)maxCombo=combo; comboTimer=nextComboTimer();
+      catVY=Math.max(catVY,0)+16+Math.random()*8;
+      catVX*=0.5;
+      catSpin=(Math.random()-0.5)*0.5;
       shakePow=20;
       spawnParticles(catX,catY,'#aa44ff',36,1.8);
       spawnParticles(catX,catY,'#ffffff',14,1.2);
-      spawnPopup(catX,catY-60,'🕳️ SLINGSHOT!','#aa44ff');
+      spawnPopup(catX,catY-60,'🕳️ CRUSHED!','#aa44ff');
       SFX.hit('orbit');
     } else if(s.kind==='asteroid'){
-      catVY=-Math.max(Math.abs(catVY)+6,22)-Math.random()*8;
-      catVX+=6+Math.random()*5;
-      catSpin=(catVX>0?1:-1)*0.3;
-      combo+=2; if(combo>maxCombo)maxCombo=combo; comboTimer=nextComboTimer();
+      catVY=Math.max(catVY,0)+12+Math.random()*6;
+      catVX*=(Math.random()<0.5?1:-1)*(0.5+Math.random()*0.4);
+      catSpin=(Math.random()-0.5)*0.5;
       shakePow=14;
       spawnParticles(catX,catY,'#cc9944',24,1.4);
       spawnParticles(catX,catY,'#ffcc66',10,1.0);
-      spawnPopup(catX,catY-55,'☄️ ASTEROID RIDE!','#ffaa33');
+      spawnPopup(catX,catY-55,'☄️ SMASHED!','#ffaa33');
       SFX.hit('rocket');
     } else if(s.kind==='gravity_wave'){
-      catVY=-Math.max(Math.abs(catVY)+5,28)-Math.random()*8;
-      catVX+=4+Math.random()*4;
+      catVY=Math.max(catVY,0)+14+Math.random()*6;
+      catVX*=0.65;
       catSpin=(Math.random()-0.5)*0.3;
-      combo+=2; if(combo>maxCombo)maxCombo=combo; comboTimer=nextComboTimer();
       shakePow=12;
       spawnParticles(catX,catY,'#8844ff',22,1.3);
       spawnParticles(catX,catY,'#cc88ff',12,0.9);
-      spawnPopup(catX,catY-55,'🌊 WAVE LAUNCH!','#aa55ff');
+      spawnPopup(catX,catY-55,'🌊 PULLED DOWN!','#aa55ff');
       SFX.hit('geyser');
     }
     totalBounces++;
@@ -2487,61 +2528,70 @@ canvas.addEventListener('touchmove',onMove,{passive:false});
 canvas.addEventListener('touchend',onUp);
 
 function syncColorWheels() {
-  document.getElementById('splashCatColor').value = catPickedColor;
-  document.getElementById('goCatColor').value = catPickedColor;
-  document.getElementById('splashFatColor').value = fatCatPickedColor;
-  document.getElementById('goFatColor').value = fatCatPickedColor;
-  ['splashFatSection','goFatSection'].forEach(id => {
-    document.getElementById(id).style.display = fatCatUnlocked ? 'flex' : 'none';
+  const mode = catIsUnicornCat ? 'unicat' : catIsTieDye ? 'tiedye' : catIsFat ? 'fat' : 'regular';
+  const colorVal = catIsFat ? fatCatPickedColor : catPickedColor;
+  document.getElementById('splashCatColor').value = colorVal;
+  document.getElementById('goCatColor').value = colorVal;
+  const hideColor = catIsUnicornCat || catIsTieDye;
+  document.getElementById('splash-color-row').style.display = hideColor ? 'none' : 'flex';
+  document.getElementById('go-color-row').style.display = hideColor ? 'none' : 'flex';
+  ['regular','fat','tiedye','unicat'].forEach(m => {
+    const locked = (m==='fat' && !fatCatUnlocked) ||
+                   (m==='tiedye' && !tieDyeCatUnlocked) ||
+                   (m==='unicat' && !unicornCatUnlocked);
+    ['sw-'+m,'gw-'+m].forEach(id => {
+      const el = document.getElementById(id);
+      if(!el) return;
+      el.classList.toggle('selected', m===mode);
+      el.classList.toggle('locked', locked);
+    });
+    ['sl-'+m,'gl-'+m].forEach(id => {
+      const el = document.getElementById(id);
+      if(el) el.style.display = locked ? 'block' : 'none';
+    });
   });
-  ['splashFatBtn','goFatBtn'].forEach(id => {
-    document.getElementById(id).classList.toggle('fat-active', catIsFat);
-    document.getElementById(id).textContent = catIsFat ? '🐱 Fat Cat ON' : '🐱 Use Fat Cat';
-  });
-  ['splashFatColorRow','goFatColorRow'].forEach(id => {
-    document.getElementById(id).style.display = catIsFat ? 'flex' : 'none';
-  });
-  ['splashTieDyeSection','goTieDyeSection'].forEach(id => {
-    document.getElementById(id).style.display = tieDyeCatUnlocked ? 'flex' : 'none';
-  });
-  ['splashTieDyeBtn','goTieDyeBtn'].forEach(id => {
-    document.getElementById(id).classList.toggle('fat-active', catIsTieDye);
-    document.getElementById(id).textContent = catIsTieDye ? '🌈 Tie-Dye Cat ON' : '🌈 Use Tie-Dye Cat';
-  });
-  ['splashUniCatSection','goUniCatSection'].forEach(id => {
-    document.getElementById(id).style.display = unicornCatUnlocked ? 'flex' : 'none';
-  });
-  ['splashUniCatBtn','goUniCatBtn'].forEach(id => {
-    document.getElementById(id).classList.toggle('fat-active', catIsUnicornCat);
-    document.getElementById(id).textContent = catIsUnicornCat ? '🦄 Unicorn Cat ON' : '🦄 Use Unicorn Cat';
-  });
+  renderCatAvatars();
 }
-function toggleFatCat() {
-  if(!fatCatUnlocked) return;
-  catIsFat = !catIsFat;
-  if(catIsFat){ catIsTieDye=false; catIsUnicornCat=false; }
-  localStorage.setItem('kittyUsingFat',     catIsFat ? '1' : '0');
-  localStorage.setItem('kittyUsingTieDye',  '0');
-  localStorage.setItem('kittyUsingUniCat',  '0');
-  syncColorWheels();
-}
-function toggleTieDye() {
-  if(!tieDyeCatUnlocked) return;
-  catIsTieDye = !catIsTieDye;
-  if(catIsTieDye){ catIsFat=false; catIsUnicornCat=false; }
-  localStorage.setItem('kittyUsingTieDye', catIsTieDye ? '1' : '0');
-  localStorage.setItem('kittyUsingFat',    '0');
-  localStorage.setItem('kittyUsingUniCat', '0');
-  syncColorWheels();
-}
-function toggleUnicornCat() {
-  if(!unicornCatUnlocked) return;
-  catIsUnicornCat = !catIsUnicornCat;
-  if(catIsUnicornCat){ catIsFat=false; catIsTieDye=false; }
+function selectCat(mode) {
+  if(mode==='fat'    && !fatCatUnlocked)     return;
+  if(mode==='tiedye' && !tieDyeCatUnlocked)  return;
+  if(mode==='unicat' && !unicornCatUnlocked) return;
+  catIsFat        = mode==='fat';
+  catIsTieDye     = mode==='tiedye';
+  catIsUnicornCat = mode==='unicat';
+  localStorage.setItem('kittyUsingFat',    catIsFat        ? '1' : '0');
+  localStorage.setItem('kittyUsingTieDye', catIsTieDye     ? '1' : '0');
   localStorage.setItem('kittyUsingUniCat', catIsUnicornCat ? '1' : '0');
-  localStorage.setItem('kittyUsingFat',    '0');
-  localStorage.setItem('kittyUsingTieDye', '0');
   syncColorWheels();
+}
+function renderCatAvatars() {
+  const savedCtx = ctx;
+  const savedSquish = catSquish, savedStretch = catStretch;
+  const savedScream = screamTimer, savedCombo = combo;
+  catSquish = 1; catStretch = 1; screamTimer = 0; combo = 0;
+  const configs = [
+    { ids:['av-s-regular','av-g-regular'], fn:()=>drawCat(0,0,0),        scale:0.82, oy:4  },
+    { ids:['av-s-fat',    'av-g-fat'    ], fn:()=>drawFatCat(0,0,0),     scale:0.54, oy:-1 },
+    { ids:['av-s-tiedye', 'av-g-tiedye' ], fn:()=>drawTieDyeCat(0,0,0),  scale:0.82, oy:4  },
+    { ids:['av-s-unicat', 'av-g-unicat' ], fn:()=>drawUnicornCat(0,0,0), scale:0.65, oy:7  },
+  ];
+  for(const cfg of configs) {
+    for(const id of cfg.ids) {
+      const el = document.getElementById(id);
+      if(!el) continue;
+      const c = el.getContext('2d');
+      ctx = c;
+      c.clearRect(0, 0, 64, 64);
+      c.save();
+      c.translate(32, 32 + cfg.oy);
+      c.scale(cfg.scale, cfg.scale);
+      cfg.fn();
+      c.restore();
+    }
+  }
+  ctx = savedCtx;
+  catSquish = savedSquish; catStretch = savedStretch;
+  screamTimer = savedScream; combo = savedCombo;
 }
 function updateTieDyeUnlock() {
   tieDyeCatUnlocked = true;
@@ -2559,24 +2609,16 @@ function updateFatCatSwatches() {
   syncColorWheels();
 }
 document.getElementById('splashCatColor').addEventListener('input', e => {
-  catPickedColor = e.target.value;
-  document.getElementById('goCatColor').value = catPickedColor;
-  localStorage.setItem('kittyPickedColor', catPickedColor);
+  if(catIsFat){ fatCatPickedColor=e.target.value; localStorage.setItem('kittyFatPickedColor',fatCatPickedColor); }
+  else{ catPickedColor=e.target.value; localStorage.setItem('kittyPickedColor',catPickedColor); }
+  document.getElementById('goCatColor').value = e.target.value;
+  renderCatAvatars();
 });
 document.getElementById('goCatColor').addEventListener('input', e => {
-  catPickedColor = e.target.value;
-  document.getElementById('splashCatColor').value = catPickedColor;
-  localStorage.setItem('kittyPickedColor', catPickedColor);
-});
-document.getElementById('splashFatColor').addEventListener('input', e => {
-  fatCatPickedColor = e.target.value;
-  document.getElementById('goFatColor').value = fatCatPickedColor;
-  localStorage.setItem('kittyFatPickedColor', fatCatPickedColor);
-});
-document.getElementById('goFatColor').addEventListener('input', e => {
-  fatCatPickedColor = e.target.value;
-  document.getElementById('splashFatColor').value = fatCatPickedColor;
-  localStorage.setItem('kittyFatPickedColor', fatCatPickedColor);
+  if(catIsFat){ fatCatPickedColor=e.target.value; localStorage.setItem('kittyFatPickedColor',fatCatPickedColor); }
+  else{ catPickedColor=e.target.value; localStorage.setItem('kittyPickedColor',catPickedColor); }
+  document.getElementById('splashCatColor').value = e.target.value;
+  renderCatAvatars();
 });
 syncColorWheels();
 
