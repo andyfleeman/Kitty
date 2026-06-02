@@ -220,76 +220,86 @@ function initSprites() {
   // Key principles: all gradient edges fade to alpha=0 (no hard circle borders),
   // organic puff arrangement, strong flat base shadow, warm tops / cool bottoms.
   function makeCumulusSprite(refW) {
-    const refH = Math.round(refW * 0.68);
+    const refH = Math.round(refW * 0.76);
     const oc = document.createElement('canvas');
     oc.width = refW*2; oc.height = refH*2;
     const c = oc.getContext('2d');
     c.scale(2,2);
 
-    const cx = refW*0.50;
-    const base = refH*0.76; // y of flat cloud base
+    const cx = refW*0.50, base = refH*0.84;
 
-    // Organic, asymmetric puff layout  [x, y, radius]
-    const puffs = [
-      // Base row — large, define the flat bottom
-      [cx-refW*0.22, base-refW*0.10, refW*0.32],
-      [cx+refW*0.04, base-refW*0.13, refW*0.36],
-      [cx+refW*0.26, base-refW*0.09, refW*0.27],
-      // Middle tier — building up
-      [cx-refW*0.33, base-refW*0.28, refW*0.24],
-      [cx-refW*0.10, base-refW*0.35, refW*0.30],
-      [cx+refW*0.14, base-refW*0.37, refW*0.28],
-      [cx+refW*0.34, base-refW*0.27, refW*0.22],
-      // Upper tier
-      [cx-refW*0.20, base-refW*0.54, refW*0.22],
-      [cx+refW*0.05, base-refW*0.60, refW*0.25],
-      [cx+refW*0.26, base-refW*0.51, refW*0.19],
-      // Peak
-      [cx-refW*0.03, base-refW*0.76, refW*0.18],
-      [cx+refW*0.18, base-refW*0.70, refW*0.15],
+    // On-curve valley waypoints (the silhouette bottom of each bump)
+    const V = [
+      [cx-refW*0.44, base            ],
+      [cx-refW*0.20, base-refW*0.18  ],
+      [cx+refW*0.02, base-refW*0.30  ],
+      [cx+refW*0.24, base-refW*0.22  ],
+      [cx+refW*0.44, base-refW*0.06  ],
     ];
+    // Quadratic control points pulled high above curve = the bumps
+    const CP = [
+      [cx-refW*0.32, base-refW*0.44  ],
+      [cx-refW*0.09, base-refW*0.72  ],
+      [cx+refW*0.13, base-refW*0.62  ],
+      [cx+refW*0.34, base-refW*0.36  ],
+    ];
+    // Visual peak of each bump (point on the quadratic at t=0.5)
+    const peaks = CP.map((cp,i)=>[
+      0.25*V[i][0]+0.5*cp[0]+0.25*V[i+1][0],
+      0.25*V[i][1]+0.5*cp[1]+0.25*V[i+1][1],
+    ]);
 
-    // Pass 1: Ambient under-shadow (very subtle, preconditions the canvas)
-    puffs.forEach(([px,py,pr]) => {
-      const g = c.createRadialGradient(px,py+pr*0.5,0, px,py+pr*0.25,pr*1.1);
-      g.addColorStop(0,'rgba(80,95,155,0.22)');
-      g.addColorStop(0.6,'rgba(90,105,165,0.08)');
-      g.addColorStop(1,'rgba(100,115,175,0)');
-      c.fillStyle=g; c.beginPath(); c.arc(px,py,pr*1.1,0,Math.PI*2); c.fill();
+    function trace() {
+      c.beginPath();
+      c.moveTo(V[0][0], base); c.lineTo(V[0][0], V[0][1]);
+      for(let i=0;i<CP.length;i++)
+        c.quadraticCurveTo(CP[i][0],CP[i][1],V[i+1][0],V[i+1][1]);
+      c.lineTo(V[4][0], base); c.closePath();
+    }
+
+    trace(); c.save(); c.clip();
+
+    // Main body: warm cream top → cool blue-grey base
+    const topY = peaks[1][1];
+    const bodyG = c.createLinearGradient(0,topY,0,base);
+    bodyG.addColorStop(0,   'rgba(255,255,252,1.00)');
+    bodyG.addColorStop(0.18,'rgba(252,254,255,0.99)');
+    bodyG.addColorStop(0.50,'rgba(235,244,255,0.97)');
+    bodyG.addColorStop(0.75,'rgba(208,226,252,0.95)');
+    bodyG.addColorStop(1.00,'rgba(158,192,238,0.92)');
+    c.fillStyle=bodyG; c.fillRect(0,0,refW,refH);
+
+    // Flat-base shadow gradient
+    const shadH = refW*0.22;
+    const shadG = c.createLinearGradient(0,base-shadH,0,base);
+    shadG.addColorStop(0,   'rgba(48,62,138,0)');
+    shadG.addColorStop(0.38,'rgba(42,56,132,0.34)');
+    shadG.addColorStop(0.74,'rgba(36,50,126,0.60)');
+    shadG.addColorStop(1.00,'rgba(30,44,120,0.76)');
+    c.fillStyle=shadG; c.fillRect(0,base-shadH,refW,shadH+4);
+
+    // Specular highlight at each bump top
+    peaks.forEach(([px,py],i)=>{
+      const r = refW*(0.16-i*0.014);
+      const sg = c.createRadialGradient(px-r*0.22,py-r*0.10,0, px,py+r*0.48,r*1.25);
+      sg.addColorStop(0,   'rgba(255,255,248,0.88)');
+      sg.addColorStop(0.36,'rgba(255,255,252,0.38)');
+      sg.addColorStop(0.72,'rgba(255,255,255,0.08)');
+      sg.addColorStop(1,   'rgba(255,255,255,0)');
+      c.fillStyle=sg; c.beginPath(); c.arc(px,py+r*0.48,r*1.1,0,Math.PI*2); c.fill();
     });
 
-    // Pass 2: Main cloud body — CRITICAL: final stop is alpha=0, so NO hard circle edge
-    puffs.forEach(([px,py,pr]) => {
-      const g = c.createRadialGradient(px-pr*0.24,py-pr*0.30, pr*0.03, px+pr*0.06,py+pr*0.10, pr*1.04);
-      g.addColorStop(0,   'rgba(255,255,250,0.97)'); // warm-white core
-      g.addColorStop(0.25,'rgba(252,253,255,0.90)');
-      g.addColorStop(0.52,'rgba(238,245,255,0.60)'); // slight cool mid
-      g.addColorStop(0.78,'rgba(220,234,254,0.20)'); // blue-grey fade
-      g.addColorStop(1,   'rgba(210,228,252,0)');    // fully transparent edge
-      c.fillStyle=g; c.beginPath(); c.arc(px,py,pr*1.04,0,Math.PI*2); c.fill();
-    });
+    // Valley shadow accents (depth between bumps)
+    for(let i=1;i<=3;i++){
+      const [vx,vy]=V[i], r=refW*0.058;
+      const vg=c.createRadialGradient(vx,vy,0,vx,vy,r);
+      vg.addColorStop(0,'rgba(40,54,128,0.42)');
+      vg.addColorStop(0.5,'rgba(48,62,136,0.14)');
+      vg.addColorStop(1,'rgba(56,70,144,0)');
+      c.fillStyle=vg; c.beginPath(); c.arc(vx,vy,r,0,Math.PI*2); c.fill();
+    }
 
-    // Pass 3: Fold / inter-puff shadows — placed where puffs overlap (depth cue)
-    // Lower puffs receive stronger shadow (in shadow of upper mass)
-    puffs.forEach(([px,py,pr],i) => {
-      const str = i<3 ? 0.52 : i<7 ? 0.28 : 0.12;
-      const g = c.createRadialGradient(px+pr*0.10,py+pr*0.58,pr*0.04, px,py+pr*0.22,pr*0.96);
-      g.addColorStop(0,`rgba(72,88,152,${str})`);
-      g.addColorStop(0.45,`rgba(82,98,162,${str*0.42})`);
-      g.addColorStop(1,'rgba(92,108,172,0)');
-      c.fillStyle=g; c.beginPath(); c.arc(px,py,pr*0.96,0,Math.PI*2); c.fill();
-    });
-
-    // Pass 4: Bright top-lit specular — warm cream shine on upper surface
-    puffs.forEach(([px,py,pr]) => {
-      const g = c.createRadialGradient(px-pr*0.28,py-pr*0.34,0, px-pr*0.08,py-pr*0.16,pr*0.68);
-      g.addColorStop(0,  'rgba(255,255,245,0.92)'); // warm cream
-      g.addColorStop(0.35,'rgba(255,255,250,0.38)');
-      g.addColorStop(0.72,'rgba(255,255,255,0.08)');
-      g.addColorStop(1,  'rgba(255,255,255,0)');
-      c.fillStyle=g; c.beginPath(); c.arc(px,py,pr*0.88,0,Math.PI*2); c.fill();
-    });
-
+    c.restore();
     return {canvas:oc, dw:refW, dh:refH};
   }
 
