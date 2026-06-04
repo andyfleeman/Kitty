@@ -510,6 +510,10 @@ let trampolines = [], boosters = [], clouds = [], rainbows = [], unicorns = [], 
 let flashAlpha = 0;
 let tieDyeCatUnlocked = localStorage.getItem('kittyTieDye') === '1';
 let unicornCatUnlocked = localStorage.getItem('kittyUniCat') === '1';
+// Retroactively grant unlocks if high score already qualifies (covers localStorage migration / fresh installs)
+if(highScore >= 50000  && !fatCatUnlocked)   { fatCatUnlocked = true;   localStorage.setItem('kittyFatCat','1'); }
+if(highScore >= 75000  && !tieDyeCatUnlocked){ tieDyeCatUnlocked = true; localStorage.setItem('kittyTieDye','1'); }
+if(highScore >= 100000 && !unicornCatUnlocked){ unicornCatUnlocked = true; localStorage.setItem('kittyUniCat','1'); }
 let catIsTieDye = tieDyeCatUnlocked && localStorage.getItem('kittyUsingTieDye') === '1';
 let catIsUnicornCat = unicornCatUnlocked && localStorage.getItem('kittyUsingUniCat') === '1';
 let lastBoostX = 0;
